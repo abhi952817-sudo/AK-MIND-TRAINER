@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "games": {
+      "$roomId": {
+        ".read": "auth != null",
+        // Only allow write if room participant or server admin token
+        ".write": "auth != null && (data.child('players/' + auth.uid).exists() || newData.child('players/' + auth.uid).exists() || data.child('hostId').val() === auth.uid)",
+        "turn": {
+          ".validate": "newData.isString()"
+        },
+        "dice": {
+          // Dice value authoritative write
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 6"
+        },
+        "tokens": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    },
+    "presence": {
+      "$roomId": {
+        "$userId": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === $userId"
+        }
+      }
+    }
+  }
+}

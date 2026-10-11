@@ -1,0 +1,6 @@
+{
+  "name": "LudoVerse - Mobile UI/UX",
+  "description": "Modern, clean mobile UI/UX for LudoVerse — multiplayer Ludo game with multi-game support, portrait mobile design, dark and light mode, and full screen states.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

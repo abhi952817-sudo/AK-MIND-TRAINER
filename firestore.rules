@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User profile access rules
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['coins', 'diamonds', 'winCount', 'gamesPlayed'])
+            || request.auth.token.admin == true);
+      allow delete: if false;
+    }
+    
+    // Authoritative room metadata
+    match /rooms/{roomId} {
+      allow read: if request.auth != null;
+      
+      allow create: if request.auth != null
+        && request.resource.data.hostId == request.auth.uid
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.maxPlayers in [2, 3, 4];
+        
+      allow update: if request.auth != null && (
+        resource.data.hostId == request.auth.uid ||
+        request.resource.data.playerIds.hasAny([request.auth.uid]) ||
+        resource.data.playerIds.hasAny([request.auth.uid])
+      );
+      
+      allow delete: if request.auth != null && resource.data.hostId == request.auth.uid;
+      
+      // In-game real-time floating chat subcollection
+      match /messages/{messageId} {
+        // Only active room members can read messages
+        allow read: if request.auth != null && (
+          get(/databases/$(database)/documents/rooms/$(roomId)).data.players.hasAny([{'uid': request.auth.uid}])
+          || get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid
+        );
+
+        // Server-authoritative message creation validation
+        allow create: if request.auth != null
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.type in ['text', 'emoji', 'voice']
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.expiresAt > request.time
+          && request.resource.data.cooldownUntil >= request.time
+          // Length restrictions
+          && (request.resource.data.type != 'text' || request.resource.data.text.size() <= 120)
+          && (request.resource.data.type != 'emoji' || request.resource.data.emoji.size() <= 10)
+          && (request.resource.data.type != 'voice' || request.resource.data.audioDuration <= 10);
+
+        // Messages are immutable once posted
+        allow update: if false;
+        
+        // Host or sender can delete expired message
+        allow delete: if request.auth != null && (
+          resource.data.senderId == request.auth.uid
+          || get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == request.auth.uid
+          || resource.data.expiresAt <= request.time
+        );
+      }
+    }
+    
+    // Leaderboard read-only collection populated by backend/Cloud Functions
+    match /leaderboard/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
