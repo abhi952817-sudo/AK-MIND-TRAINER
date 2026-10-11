@@ -7,7 +7,7 @@ enum TokenState { home, active, safe, finished }
 enum GamePhase { waiting, rolling, moving, finished }
 
 class AppConstants {
-  static const String appName = 'AK Ludo';
+  static const String appName = 'AK MIND TRAINER';
   static const int boardDimension = 15;
   static const int turnTimeoutSeconds = 15;
 
