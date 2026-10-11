@@ -46,7 +46,7 @@ class AppTheme {
         centerTitle: false,
       ),
 
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: ThemePalette.surfaceDark,
         elevation: 2,
         margin: EdgeInsets.zero,
@@ -119,7 +119,7 @@ class AppTheme {
         centerTitle: false,
       ),
 
-      cardTheme: CardThemeData(
+      cardTheme: CardTheme(
         color: ThemePalette.surfaceLight,
         elevation: 1,
         margin: EdgeInsets.zero,
