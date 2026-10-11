@@ -1,4 +1,4 @@
-// LudoVerse Types & Design System Definitions
+// AK MIND TRAINER Types & Design System Definitions
 
 export type ScreenId =
   | 'splash'

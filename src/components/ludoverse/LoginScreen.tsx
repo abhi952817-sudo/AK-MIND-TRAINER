@@ -135,7 +135,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           </div>
         )}
 
-        {/* Small logo (48dp) top-left with "LudoVerse" wordmark beside it */}
+        {/* Small logo (48dp) top-left with "AK MIND TRAINER" wordmark beside it */}
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-white/20 shadow-md p-2 flex flex-col justify-between items-center">
             <div className="flex justify-between w-full">

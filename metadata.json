@@ -1,6 +1,6 @@
 {
   "name": "AK MIND TRAINER",
-  "description": "AK MIND TRAINER — Advanced LudoVerse multiplayer Ludo game with Classic, Quick, Team, and Octagonal modes, 3D animated dice, blockade rules, and turn management.",
+  "description": "AK MIND TRAINER — Advanced strategic multiplayer Ludo game with Classic, Quick, Team, and Octagonal modes, 3D animated dice, blockade rules, and turn management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

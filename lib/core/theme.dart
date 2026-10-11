@@ -5,7 +5,7 @@ class AppConstants {
   static const String appName = 'AK MIND TRAINER';
   static const String tagline = 'Play. Compete. Win.';
 
-  // LudoVerse Color Palette
+  // AK MIND TRAINER Color Palette
   static const Color primaryRed = Color(0xFFE63946);
   static const Color secondaryGreen = Color(0xFF2A9D8F);
   static const Color accentYellow = Color(0xFFF4A261);
