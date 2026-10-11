@@ -47,7 +47,7 @@ class _LobbyRoomScreenState extends State<LobbyRoomScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GAME ROOM LOBBY'),
+        title: const Text('LUDO ROOM LOBBY'),
         actions: [
           IconButton(
             icon: const Icon(Icons.exit_to_app),

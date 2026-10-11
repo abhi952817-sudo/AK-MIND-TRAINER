@@ -226,7 +226,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         backgroundColor: AppConstants.boardBackground,
         appBar: AppBar(
           title: Text(
-            'AK MIND TRAINER #${_room.roomCode}',
+            'Ludo #${_room.roomCode}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1),
           ),
           leading: IconButton(
