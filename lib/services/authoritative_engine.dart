@@ -1,4 +1,5 @@
 import 'dart:math';
+
 import '../core/constants.dart';
 import '../models/game_room_model.dart';
 import '../models/player_model.dart';
@@ -11,7 +12,7 @@ class MoveResult {
   final bool reachedHome;
   final bool grantsBonusTurn;
 
-  MoveResult({
+  const MoveResult({
     required this.isValid,
     this.message = '',
     this.updatedRoom,
@@ -24,132 +25,250 @@ class MoveResult {
 class AuthoritativeLudoEngine {
   static final Random _secureRandom = Random.secure();
 
-  /// Authoritative server-side roll dice
+  /// Generates a dice value for the current local game.
+  ///
+  /// Important: this client-side method is not a server-authoritative
+  /// multiplayer dice system.
   static int rollAuthoritativeDice() {
     return _secureRandom.nextInt(6) + 1;
   }
 
-  /// Calculates whether a token can legally move with the current dice roll
+  /// Checks whether a token can legally move with the current dice.
   static bool canTokenMove(TokenModel token, int diceValue) {
-    if (token.isFinished) return false;
+    if (diceValue < 1 || diceValue > 6) {
+      return false;
+    }
 
-    // Token inside home base: Needs 6 to unlock into start position
+    if (token.isFinished) {
+      return false;
+    }
+
+    // A token in the base needs a six to enter the board.
     if (token.isInBase) {
       return diceValue == 6;
     }
 
-    // Maximum steps is 57 (0 = start, 50 = common loop end, 51..55 = home alley, 56 = home goal)
-    if (token.step + diceValue > 56) {
-      return false; // Cannot overshoot target home
+    // The current standard board finishes at step 56.
+    // Overshooting the finish is not allowed.
+    if (token.step < 0 || token.step + diceValue > 56) {
+      return false;
     }
 
     return true;
   }
 
-  /// Finds all movable token IDs for the active player
-  static List<int> getMovableTokenIds(PlayerModel player, int diceValue) {
-    final List<int> movable = [];
-    for (final token in player.tokens) {
-      if (canTokenMove(token, diceValue)) {
-        movable.add(token.id);
-      }
-    }
-    return movable;
+  /// Returns the IDs of all tokens that can move.
+  static List<int> getMovableTokenIds(
+    PlayerModel player,
+    int diceValue,
+  ) {
+    return player.tokens
+        .where((token) => canTokenMove(token, diceValue))
+        .map((token) => token.id)
+        .toList();
   }
 
-  /// Performs an authoritative token move
+  /// Executes a move after validating the current game state.
   static MoveResult executeTokenMove({
     required GameRoomModel room,
     required String requestingUserId,
     required int tokenId,
   }) {
-    // 1. Validate game is active
+    // 1. A match must be active.
     if (room.status != RoomStatus.playing) {
-      return MoveResult(isValid: false, message: 'Game is not in active state');
+      return const MoveResult(
+        isValid: false,
+        message: 'Game is not in active state.',
+      );
     }
 
-    // 2. Validate it is the player's turn
+    // 2. It must be the active player's turn.
     final activePlayer = room.activePlayer;
-    if (activePlayer == null || activePlayer.uid != requestingUserId) {
-      return MoveResult(isValid: false, message: 'Not your turn');
+
+    if (activePlayer == null ||
+        activePlayer.uid != requestingUserId) {
+      return const MoveResult(
+        isValid: false,
+        message: 'Not your turn.',
+      );
     }
 
-    // 3. Validate dice was already rolled
+    // 3. The dice must already have been rolled.
     if (!room.hasRolledDice) {
-      return MoveResult(isValid: false, message: 'Must roll dice first');
+      return const MoveResult(
+        isValid: false,
+        message: 'Roll the dice first.',
+      );
     }
 
-    final dice = room.diceValue;
-    final token = activePlayer.tokens.firstWhere((t) => t.id == tokenId);
+    final int dice = room.diceValue;
 
-    if (!canTokenMove(token, dice)) {
-      return MoveResult(isValid: false, message: 'Illegal move for this token');
+    if (dice < 1 || dice > 6) {
+      return const MoveResult(
+        isValid: false,
+        message: 'Invalid dice value.',
+      );
     }
 
-    int nextStep;
-    if (token.isInBase) {
-      nextStep = 0; // Moves to starting cell
-    } else {
-      nextStep = token.step + dice;
+    // 4. Special case: -99 means the screen requested an auto-pass.
+    //
+    // Only allow passing when no token has a legal move.
+    // This prevents the previous firstWhere(-99) crash and prevents
+    // a player from voluntarily skipping a valid move.
+    if (tokenId == -99) {
+      final movableTokens = getMovableTokenIds(activePlayer, dice);
+
+      if (movableTokens.isNotEmpty) {
+        return const MoveResult(
+          isValid: false,
+          message: 'A valid move is available.',
+        );
+      }
+
+      final nextColor = _getNextTurnColor(
+        room.players,
+        room.currentTurnColor,
+      );
+
+      final updatedRoom = room.copyWith(
+        currentTurnColor: nextColor,
+        hasRolledDice: false,
+        turnTimeRemaining: AppConstants.turnTimeoutSeconds,
+      );
+
+      return MoveResult(
+        isValid: true,
+        message: 'Turn passed because no valid move was available.',
+        updatedRoom: updatedRoom,
+      );
     }
 
-    final bool reachedHome = nextStep == 56;
-    final bool isFinished = reachedHome;
+    // 5. Find the requested token safely.
+    TokenModel? selectedToken;
 
-    // Check if new position is a safe cell
-    final bool isSafe = _isPositionSafe(activePlayer.color, nextStep);
-
-    // Check for captures on opponents
-    bool capturedOpponent = false;
-    List<PlayerModel> updatedPlayers = [];
-
-    // Calculate global board coordinate for collision check
-    final globalIndex = _calculateGlobalTrackIndex(activePlayer.color, nextStep);
-
-    for (final player in room.players) {
-      if (player.color == activePlayer.color) {
-        // Update current player's token
-        final newTokens = player.tokens.map((t) {
-          if (t.id == tokenId) {
-            return t.copyWith(
-              step: nextStep,
-              isSafe: isSafe,
-              isFinished: isFinished,
-            );
-          }
-          return t;
-        }).toList();
-
-        updatedPlayers.add(player.copyWith(tokens: newTokens));
-      } else {
-        // Check collision if not safe
-        if (!isSafe && globalIndex != null) {
-          final newTokens = player.tokens.map((t) {
-            if (!t.isInBase && !t.isFinished && !t.isSafe) {
-              final oppGlobal = _calculateGlobalTrackIndex(player.color, t.step);
-              if (oppGlobal == globalIndex) {
-                capturedOpponent = true;
-                return t.copyWith(step: -1, isSafe: true); // Reset to base
-              }
-            }
-            return t;
-          }).toList();
-          updatedPlayers.add(player.copyWith(tokens: newTokens));
-        } else {
-          updatedPlayers.add(player);
-        }
+    for (final token in activePlayer.tokens) {
+      if (token.id == tokenId) {
+        selectedToken = token;
+        break;
       }
     }
 
-    // Check for win
-    final updatedActivePlayer = updatedPlayers.firstWhere((p) => p.color == activePlayer.color);
-    final hasWon = updatedActivePlayer.hasWon;
+    if (selectedToken == null) {
+      return const MoveResult(
+        isValid: false,
+        message: 'Token not found.',
+      );
+    }
 
-    final bool bonusTurn = (dice == 6) || capturedOpponent || reachedHome;
-    final PlayerColor nextTurnColor = (bonusTurn && !hasWon)
-        ? room.currentTurnColor
-        : _getNextTurnColor(room.players, room.currentTurnColor);
+    if (!canTokenMove(selectedToken, dice)) {
+      return const MoveResult(
+        isValid: false,
+        message: 'Illegal move for this token.',
+      );
+    }
 
+    // 6. Calculate the new token position.
+    final int nextStep = selectedToken.isInBase
+        ? 0
+        : selectedToken.step + dice;
+
+    final bool reachedHome = nextStep == 56;
+
+    final bool isSafe = _isPositionSafe(
+      activePlayer.color,
+      nextStep,
+    );
+
+    final int? globalIndex = _calculateGlobalTrackIndex(
+      activePlayer.color,
+      nextStep,
+    );
+
+    bool capturedOpponent = false;
+    final List<PlayerModel> updatedPlayers = [];
+
+    // 7. Move the selected token and check for captures.
+    for (final player in room.players) {
+      if (player.uid == activePlayer.uid) {
+        final updatedTokens = player.tokens.map((token) {
+          if (token.id != tokenId) {
+            return token;
+          }
+
+          return token.copyWith(
+            step: nextStep,
+            isSafe: isSafe,
+            isFinished: reachedHome,
+          );
+        }).toList();
+
+        updatedPlayers.add(
+          player.copyWith(tokens: updatedTokens),
+        );
+
+        continue;
+      }
+
+      // Finished tokens, base tokens and safe tokens cannot be captured.
+      if (isSafe || globalIndex == null) {
+        updatedPlayers.add(player);
+        continue;
+      }
+
+      final updatedTokens = player.tokens.map((token) {
+        if (token.isInBase ||
+            token.isFinished ||
+            token.isSafe) {
+          return token;
+        }
+
+        final int? opponentIndex = _calculateGlobalTrackIndex(
+          player.color,
+          token.step,
+        );
+
+        if (opponentIndex == globalIndex) {
+          capturedOpponent = true;
+
+          // Captured token returns to its base.
+          return token.copyWith(
+            step: -1,
+            isSafe: true,
+            isFinished: false,
+          );
+        }
+
+        return token;
+      }).toList();
+
+      updatedPlayers.add(
+        player.copyWith(tokens: updatedTokens),
+      );
+    }
+
+    // 8. Determine whether the active player has won.
+    final updatedActivePlayer = updatedPlayers.firstWhere(
+      (player) => player.uid == activePlayer.uid,
+    );
+
+    final bool hasWon = updatedActivePlayer.hasWon;
+
+    // 9. Determine whether another turn is awarded.
+    final bool bonusTurn =
+        dice == 6 || capturedOpponent || reachedHome;
+
+    final PlayerColor nextTurnColor;
+
+    if (bonusTurn && !hasWon) {
+      nextTurnColor = room.currentTurnColor;
+    } else {
+      nextTurnColor = _getNextTurnColor(
+        updatedPlayers,
+        room.currentTurnColor,
+      );
+    }
+
+    // 10. Produce the updated game state.
     final updatedRoom = room.copyWith(
       status: hasWon ? RoomStatus.finished : RoomStatus.playing,
       winnerId: hasWon ? activePlayer.uid : null,
@@ -164,35 +283,87 @@ class AuthoritativeLudoEngine {
       updatedRoom: updatedRoom,
       wasCapture: capturedOpponent,
       reachedHome: reachedHome,
-      grantsBonusTurn: bonusTurn,
+      grantsBonusTurn: bonusTurn && !hasWon,
     );
   }
 
-  static bool _isPositionSafe(PlayerColor color, int step) {
-    if (step == 0) return true; // Start position is always safe
-    if (step >= 51) return true; // Home alley is strictly safe
-    final globalIdx = _calculateGlobalTrackIndex(color, step);
-    if (globalIdx != null && AppConstants.safeCellIndices.contains(globalIdx)) {
+  /// Checks whether a token position is safe on the standard board.
+  static bool _isPositionSafe(
+    PlayerColor color,
+    int step,
+  ) {
+    // Starting cell and home lane are safe.
+    if (step == 0 || step >= 51) {
       return true;
     }
-    return false;
+
+    final globalIndex = _calculateGlobalTrackIndex(
+      color,
+      step,
+    );
+
+    return globalIndex != null &&
+        AppConstants.safeCellIndices.contains(globalIndex);
   }
 
-  static int? _calculateGlobalTrackIndex(PlayerColor color, int step) {
-    if (step < 0 || step > 50) return null; // In base or home alley
-    final startIdx = AppConstants.startStepIndex[color]!;
-    return (startIdx + step) % 52;
+  /// Converts a player's progress into the shared 52-cell track index.
+  ///
+  /// This calculation is for the existing standard four-colour board.
+  /// Larger player-count variants require their own board definitions.
+  static int? _calculateGlobalTrackIndex(
+    PlayerColor color,
+    int step,
+  ) {
+    if (step < 0 || step > 50) {
+      return null;
+    }
+
+    final startIndex = AppConstants.startStepIndex[color];
+
+    if (startIndex == null) {
+      return null;
+    }
+
+    return (startIndex + step) % AppConstants.standardTrackLength;
   }
 
-  static PlayerColor _getNextTurnColor(List<PlayerModel> players, PlayerColor current) {
-    final order = [PlayerColor.red, PlayerColor.green, PlayerColor.yellow, PlayerColor.blue];
-    int currentIdx = order.indexOf(current);
-    for (int i = 1; i <= 4; i++) {
-      final nextColor = order[(currentIdx + i) % 4];
-      if (players.any((p) => p.color == nextColor && !p.hasWon)) {
-        return nextColor;
+  /// Selects the next eligible player using the actual room player order.
+  ///
+  /// This avoids assuming that every colour is occupied.
+  /// It does not, by itself, implement 5-, 6-, 9- or 10-player boards.
+  static PlayerColor _getNextTurnColor(
+    List<PlayerModel> players,
+    PlayerColor currentColor,
+  ) {
+    if (players.isEmpty) {
+      return currentColor;
+    }
+
+    final currentIndex = players.indexWhere(
+      (player) => player.color == currentColor,
+    );
+
+    if (currentIndex == -1) {
+      final firstEligible = players.where(
+        (player) => !player.hasWon,
+      );
+
+      return firstEligible.isNotEmpty
+          ? firstEligible.first.color
+          : players.first.color;
+    }
+
+    // Find the next player who has not already won.
+    for (int offset = 1; offset <= players.length; offset++) {
+      final index = (currentIndex + offset) % players.length;
+      final candidate = players[index];
+
+      if (!candidate.hasWon) {
+        return candidate.color;
       }
     }
-    return current;
+
+    // All players have finished.
+    return currentColor;
   }
 }
