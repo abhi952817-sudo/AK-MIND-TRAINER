@@ -19,16 +19,16 @@ void main() async {
     ),
   );
 
-  runApp(const LudoVerseApp());
+  runApp(const AkMindTrainerApp());
 }
 
-class LudoVerseApp extends StatelessWidget {
-  const LudoVerseApp({super.key});
+class AkMindTrainerApp extends StatelessWidget {
+  const AkMindTrainerApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LudoVerse',
+      title: 'AK MIND TRAINER',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

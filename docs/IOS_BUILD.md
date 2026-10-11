@@ -32,7 +32,7 @@ cd ..
 3. Under the **Signing & Capabilities** tab:
    - Check **Automatically manage signing**.
    - Select your registered **Apple Developer Team**.
-   - Bundle Identifier: `com.akludo.game`.
+   - Bundle Identifier: `com.akmindtrainer.game`.
 
 ---
 

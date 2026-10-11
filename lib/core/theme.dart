@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class AppConstants {
-  // LudoVerse Identity
-  static const String appName = 'LudoVerse';
+  // AK MIND TRAINER Identity
+  static const String appName = 'AK MIND TRAINER';
   static const String tagline = 'Play. Compete. Win.';
 
   // LudoVerse Color Palette
