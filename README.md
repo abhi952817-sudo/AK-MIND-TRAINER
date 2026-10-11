@@ -1,6 +1,6 @@
-# AK Ludo — Premium 3D Cross-Platform Online Multiplayer
+# AK MIND TRAINER — Premium 3D Cross-Platform Online Multiplayer
 
-**AK Ludo** is an authoritative cross-platform 3D Ludo game with real-time multiplayer, WebRTC voice chat, server-guarded floating chat, dynamic 3D visuals, and Google AdMob monetization.
+**AK MIND TRAINER** is an authoritative cross-platform 3D Ludo game with real-time multiplayer, WebRTC voice chat, server-guarded floating chat, dynamic 3D visuals, and Google AdMob monetization.
 
 ---
 
