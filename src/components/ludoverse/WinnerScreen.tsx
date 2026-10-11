@@ -58,8 +58,8 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: 'LudoVerse Champion!',
-        text: `I just won a match on LudoVerse!`,
+        title: 'AK MIND TRAINER Champion!',
+        text: `I just won a match on AK MIND TRAINER!`,
       }).catch(() => {});
     } else {
       setToastMessage('Victory shared to clipboard!');

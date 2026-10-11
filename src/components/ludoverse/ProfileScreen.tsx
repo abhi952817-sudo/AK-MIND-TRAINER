@@ -82,7 +82,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       <ConfirmDialog
         isOpen={showLogoutConfirm}
         title="Log Out"
-        message="Are you sure you want to log out of LudoVerse?"
+        message="Are you sure you want to log out of AK MIND TRAINER?"
         confirmText="Log Out"
         cancelText="Cancel"
         onConfirm={() => {

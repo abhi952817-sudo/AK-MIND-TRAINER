@@ -58,8 +58,8 @@ export const RoomWaitingScreen: React.FC<RoomWaitingScreenProps> = ({
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: 'Join my LudoVerse match',
-        text: `Play Ludo with me on LudoVerse! Room code: ${activeRoomCode}`,
+        title: 'Join my AK MIND TRAINER match',
+        text: `Play with me on AK MIND TRAINER! Room code: ${activeRoomCode}`,
       }).catch(() => {});
     } else {
       handleCopyCode();

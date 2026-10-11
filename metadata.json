@@ -1,6 +1,6 @@
 {
-  "name": "LudoVerse - Mobile UI/UX",
-  "description": "Modern, clean mobile UI/UX for LudoVerse — multiplayer Ludo game with multi-game support, portrait mobile design, dark and light mode, and full screen states.",
+  "name": "AK MIND TRAINER",
+  "description": "AK MIND TRAINER — Advanced LudoVerse multiplayer Ludo game with Classic, Quick, Team, and Octagonal modes, 3D animated dice, blockade rules, and turn management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

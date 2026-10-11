@@ -159,7 +159,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
         </div>
 
         <p className="text-[14px] text-[#8D99AE] ml-1 mb-6">
-          Sign up to play LudoVerse with friends worldwide
+          Sign up to play AK MIND TRAINER with friends worldwide
         </p>
 
         {/* Error Banner */}

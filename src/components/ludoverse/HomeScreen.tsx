@@ -73,7 +73,7 @@ export const HomeScreen: React.FC<{
     <div className="w-full h-full flex flex-col" style={{ background: COLORS.bgDark }}>
       <div className="flex items-center justify-between px-4 h-16 shrink-0">
         <button onClick={onOpenProfile}><Avatar size={40} name={user?.name} photoUrl={user?.photoUrl} /></button>
-        <span className="font-semibold text-lg text-white">LudoVerse</span>
+        <span className="font-semibold text-lg text-white">AK MIND TRAINER</span>
         <div className="flex items-center gap-2">
           <button onClick={onOpenCoins}><CoinBadge coins={coins} /></button>
           <button onClick={onOpenSettings || onOpenProfile} className="text-xl">⚙️</button>

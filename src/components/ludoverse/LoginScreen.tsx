@@ -147,7 +147,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
               <div className="w-2.5 h-2.5 rounded-full bg-[#F4A261]" />
             </div>
           </div>
-          <span className="font-heading text-xl font-bold tracking-wide">LudoVerse</span>
+          <span className="font-heading text-xl font-bold tracking-wide">AK MIND TRAINER</span>
         </div>
 
         {/* 40dp gap */}
