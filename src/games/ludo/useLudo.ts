@@ -20,6 +20,7 @@ import {
 } from './engine';
 import { DiceValue, GameState, MoveOption, Player } from './types';
 import { getBotMove } from './bot';
+import { soundEngine } from '../../utils/audio';
 
 export interface UseLudoOptions {
   /** If true, players with isBot=true auto-roll + auto-move. */
@@ -114,12 +115,18 @@ export function useLudo(
       rollingLock.current = true;
 
       // Phase → rolling (UI plays animation)
+      soundEngine.playDiceRattle();
       setState((prev) => startRoll(prev));
 
       await sleep(rollDuration);
 
       // Generate the dice value
       const value = (1 + Math.floor(Math.random() * 6)) as DiceValue;
+      soundEngine.playDiceLand();
+      if (value === 6) {
+        soundEngine.playDiceSixBonus();
+      }
+
       let next = resolveRoll(stateRef.current, value);
       setState(next);
 
@@ -147,17 +154,29 @@ export function useLudo(
     botLock.current = true;
 
     (async () => {
-      // Roll after a brief thinking delay
-      await sleep(250);
+      // Natural thinking delay with soft strategy sound
+      soundEngine.playBotThinking();
+      await sleep(500 + Math.random() * 200);
+
       await performRoll(true);
 
-      // After roll resolves, decide a move quickly
-      await sleep(200);
+      // Natural pause after roll to evaluate best tactical move
+      await sleep(350 + Math.random() * 150);
 
       const s = stateRef.current;
       if (s.phase === 'selecting' && s.activePlayerIndex === currentPlayer.index) {
         const botMove = getBotMove(s);
         if (botMove) {
+          // Play specific audio cues based on the move's tactical outcome
+          if (botMove.captures && botMove.captures.length > 0) {
+            soundEngine.playTokenCapture();
+          } else if (botMove.reachesHome) {
+            soundEngine.playTokenHomeTriumph();
+          } else if (botMove.exitsBase) {
+            soundEngine.playTokenRelease();
+          } else if (botMove.entersHomeColumn) {
+            soundEngine.playHomeEntry();
+          }
           setState((prev) => applyMove(prev, botMove.tokenId));
         } else {
           // No legal move — engine should have auto-passed already,

@@ -14,6 +14,13 @@ export const haptics = {
   },
 
   /**
+   * Subtle click for button taps, slider ticks, and UI toggles
+   */
+  light() {
+    this.vibrate(15);
+  },
+
+  /**
    * Tactile alert when turn transitions.
    * Distinct double-pulse when it's the human user's turn; light single click for other players.
    */

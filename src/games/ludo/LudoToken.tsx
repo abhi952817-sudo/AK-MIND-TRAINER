@@ -99,6 +99,10 @@ export const LudoToken: React.FC<LudoTokenProps> = ({
           soundEngine.playTokenHop();
           haptics.tokenMove();
 
+          if (stepPos === 51) {
+            soundEngine.playHomeEntry();
+          }
+
           // On final step of sequence:
           if (index === steps.length - 1) {
             if (isSafe) {

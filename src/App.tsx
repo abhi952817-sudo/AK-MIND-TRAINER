@@ -18,6 +18,7 @@ import { SnakesLaddersScreen } from './components/ludoverse/SnakesLaddersScreen'
 import { AdBanner } from './components/ludoverse/ads/AdBanner';
 import { RewardedAdModal } from './components/ludoverse/ads/RewardedAdModal';
 import { InterstitialAdModal } from './components/ludoverse/ads/InterstitialAdModal';
+import { SoundSettingsModal } from './components/ludoverse/SoundSettingsModal';
 import { toast } from './components/ludoverse/UIComponents';
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
   const [roomCode, setRoomCode] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
   const [initialBoardType, setInitialBoardType] = useState<'classic' | 'octagon'>('classic');
+  const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
 
   // Coins state — starts as null (no fake data)
   const [coins, setCoins] = useState<number | null>(null);
@@ -75,6 +77,7 @@ export default function App() {
             onOpenSpin={() => setScreen('spin')}
             onOpenProfile={() => setScreen('profile')}
             onOpenCoins={() => setRewardedOpen(true)}
+            onOpenSettings={() => setSoundSettingsOpen(true)}
           />
         );
       case 'profile':
@@ -92,6 +95,7 @@ export default function App() {
             onWinner={() => setScreen('winner')}
             onChat={() => setChatOpen(true)}
             onRules={() => setScreen('rules')}
+            onOpenSettings={() => setSoundSettingsOpen(true)}
           />
         );
       case 'winner':
@@ -154,6 +158,11 @@ export default function App() {
         open={interstitialOpen}
         duration={5}
         onClose={() => setInterstitialOpen(false)}
+      />
+
+      <SoundSettingsModal
+        open={soundSettingsOpen}
+        onClose={() => setSoundSettingsOpen(false)}
       />
     </div>
   );

@@ -47,6 +47,7 @@ interface GameScreenProps {
   onWinner?: (winnerIndex?: number) => void;
   onChat?: () => void;
   onRules?: () => void;
+  onOpenSettings?: () => void;
   state?: StateMode | ScreenStateMode;
   players?: Player[];
   humanUid?: string;
@@ -58,6 +59,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   onWinner = () => {},
   onChat = () => {},
   onRules = () => {},
+  onOpenSettings,
   humanUid = 'you',
   initialBoardType = 'classic',
 }) => {
@@ -71,8 +73,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
 
-  // Background gameplay music lifecycle
+  // Background gameplay music lifecycle & arena start chime
   useEffect(() => {
+    soundEngine.playGameStartChime();
     soundEngine.setSceneMusic('gameplay');
     return () => {
       soundEngine.stopBgm();
@@ -246,12 +249,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({
           </button>
         </div>
 
-        {/* Right Header Utilities: Sound Mute Toggle & Circular Timer */}
+        {/* Right Header Utilities: Sound Settings, Mute Toggle & Circular Timer */}
         <div className="flex items-center gap-2">
+          {onOpenSettings && (
+            <button
+              type="button"
+              onClick={() => {
+                soundEngine.playButtonTap();
+                onOpenSettings();
+              }}
+              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10 cursor-pointer"
+              title="Audio & Sound Settings"
+            >
+              ⚙️
+            </button>
+          )}
+
           <button
             type="button"
             onClick={toggleSound}
-            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10 cursor-pointer"
             title={soundEnabled ? 'Mute Sound' : 'Enable Sound'}
           >
             {soundEnabled ? '🔊' : '🔇'}
