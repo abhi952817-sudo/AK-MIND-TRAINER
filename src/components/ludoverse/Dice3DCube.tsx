@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { haptics } from '../../utils/haptics';
 
 interface Dice3DCubeProps {
   value: number; // 1 to 6
@@ -121,6 +122,7 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
 
   const handleTap = () => {
     if (disabled || activeRolling) return;
+    haptics.diceRoll();
     setIsPressed(true);
     setTimeout(() => {
       setIsPressed(false);

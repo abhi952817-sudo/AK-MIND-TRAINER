@@ -10,6 +10,8 @@ import { LudoBoard } from '../../games/ludo/LudoBoard';
 import { useLudo } from '../../games/ludo/useLudo';
 import { Player } from '../../games/ludo/types';
 import { WIN_POSITION } from '../../games/ludo/board';
+import { soundEngine } from '../../utils/audio';
+import { haptics } from '../../utils/haptics';
 
 // 8-Player Octagonal Board imports
 import { OctagonalLudoBoard } from '../../games/ludo/OctagonalLudoBoard';
@@ -69,56 +71,28 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
 
-  // Audio synthesizer
-  const playSoundEffect = (type: 'move' | 'capture' | 'win') => {
-    if (!soundEnabled) return;
-    try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
+  // Background gameplay music lifecycle
+  useEffect(() => {
+    soundEngine.setSceneMusic('gameplay');
+    return () => {
+      soundEngine.stopBgm();
+    };
+  }, []);
 
-      if (type === 'move') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.2, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.09);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-      } else if (type === 'capture') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(780, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.22);
-        gain.gain.setValueAtTime(0.35, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.24);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      } else if (type === 'win') {
-        [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          const t = ctx.currentTime + i * 0.09;
-          osc.frequency.setValueAtTime(freq, t);
-          gain.gain.setValueAtTime(0.25, t);
-          gain.gain.linearRampToValueAtTime(0.01, t + 0.2);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t);
-          osc.stop(t + 0.22);
-        });
+  const toggleSound = () => {
+    setSoundEnabled((v) => {
+      const next = !v;
+      if (!next) {
+        soundEngine.sfxMuted = true;
+        soundEngine.bgmMuted = true;
+        soundEngine.stopBgm();
+      } else {
+        soundEngine.sfxMuted = false;
+        soundEngine.bgmMuted = false;
+        soundEngine.setSceneMusic('gameplay');
       }
-    } catch {}
+      return next;
+    });
   };
 
   // =========================================================================
@@ -195,6 +169,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     else classicGame.restart();
   };
 
+  // Turn notification sound & haptic alert
+  const prevTurnRef = useRef<number | null>(null);
+  const activeTurn = isOctagon ? octagonGame.state.activePlayerIndex : classicGame.state.activePlayerIndex;
+
+  useEffect(() => {
+    if (prevTurnRef.current !== activeTurn && activePhase !== 'ended') {
+      prevTurnRef.current = activeTurn;
+      if (soundEnabled) {
+        soundEngine.playTurnStart(activeIsHumanTurn);
+      }
+      haptics.turnTransition(activeIsHumanTurn);
+    }
+  }, [activeTurn, activePhase, activeIsHumanTurn, soundEnabled]);
+
+  // Low time warning & countdown tick
+  useEffect(() => {
+    if (soundEnabled && activePhase !== 'ended' && activeTimeLeft <= 5 && activeTimeLeft > 0) {
+      soundEngine.playCountdownTick();
+    }
+  }, [activeTimeLeft, activePhase, soundEnabled]);
+
+  // Match victory fanfare
+  useEffect(() => {
+    if (activePhase === 'ended') {
+      if (soundEnabled) {
+        soundEngine.playVictory();
+      }
+      haptics.tokenHome();
+    }
+  }, [activePhase, soundEnabled]);
+
   const timerColor =
     activeTimeLeft > 15 ? COLORS.success : activeTimeLeft > 5 ? COLORS.yellow : COLORS.error;
 
@@ -212,6 +217,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
           <button
             type="button"
             onClick={() => {
+              soundEngine.playButtonTap();
               setBoardType('classic');
               if (playerMode === 8) setPlayerMode(4);
             }}
@@ -226,6 +232,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
           <button
             type="button"
             onClick={() => {
+              soundEngine.playButtonTap();
               setBoardType('octagon');
               setPlayerMode(8);
             }}
@@ -243,7 +250,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setSoundEnabled((v) => !v)}
+            onClick={toggleSound}
             className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10"
             title={soundEnabled ? 'Mute Sound' : 'Enable Sound'}
           >
@@ -327,7 +334,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         {/* Chat Button */}
         <button
           type="button"
-          onClick={onChat}
+          onClick={() => {
+            soundEngine.playButtonTap();
+            onChat();
+          }}
           className="w-12 h-12 rounded-full flex items-center justify-center text-lg active:scale-95 transition-transform shadow-lg bg-[#24283D] hover:bg-[#2F344F] border border-white/10"
           title="Chat"
         >
@@ -337,7 +347,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         {/* Rules Button */}
         <button
           type="button"
-          onClick={() => setRulesOpen(true)}
+          onClick={() => {
+            soundEngine.playButtonTap();
+            setRulesOpen(true);
+          }}
           className="w-12 h-12 rounded-full flex items-center justify-center text-lg active:scale-95 transition-transform shadow-lg bg-[#24283D] hover:bg-[#2F344F] border border-white/10"
           title="How to Play"
         >
@@ -356,7 +369,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         {/* Menu Dropdown Toggle */}
         <button
           type="button"
-          onClick={() => setMenuOpen((v) => !v)}
+          onClick={() => {
+            soundEngine.playButtonTap();
+            setMenuOpen((v) => !v);
+          }}
           className="w-12 h-12 rounded-full flex items-center justify-center text-lg active:scale-95 transition-transform shadow-lg bg-[#24283D] hover:bg-[#2F344F] border border-white/10"
           title="Game Menu"
         >

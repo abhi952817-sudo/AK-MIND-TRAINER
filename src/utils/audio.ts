@@ -316,6 +316,209 @@ class SoundSynthesizer {
     });
   }
 
+  // Token released from yard base onto track
+  playTokenRelease() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const notes = [330, 440, 550, 660];
+    notes.forEach((freq, idx) => {
+      const t = now + idx * 0.05;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.28 * this.sfxVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.14);
+    });
+  }
+
+  // Token landing settled on destination tile
+  playTokenLand() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.07);
+
+    gain.gain.setValueAtTime(0.25 * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  // Token returning to base after being captured
+  playReturnToBase() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(580, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.35);
+
+    gain.gain.setValueAtTime(0.25 * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.4);
+  }
+
+  // Entering colored home runway
+  playHomeEntry() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const notes = [440, 554.37, 659.25];
+    notes.forEach((freq, idx) => {
+      const t = this.ctx!.currentTime + idx * 0.07;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.22 * this.sfxVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.18);
+    });
+  }
+
+  // Token reaching center home triangle (victory cell)
+  playTokenFinish() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5, E5, G5, C6, E6
+    notes.forEach((freq, idx) => {
+      const t = this.ctx!.currentTime + idx * 0.06;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t);
+
+      gain.gain.setValueAtTime(0.3 * this.sfxVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+      osc.connect(gain);
+      gain.connect(this.ctx!.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.28);
+    });
+  }
+
+  // Turn start alert chime
+  playTurnStart(isHuman: boolean = true) {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(isHuman ? 587.33 : 392, now);
+    if (isHuman) {
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+    }
+
+    gain.gain.setValueAtTime((isHuman ? 0.28 : 0.12) * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (isHuman ? 0.16 : 0.08));
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + (isHuman ? 0.18 : 0.1));
+  }
+
+  // Turn time warning alert
+  playTurnWarning() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      const t = now + i * 0.12;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(740, t);
+
+      gain.gain.setValueAtTime(0.18 * this.sfxVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+  }
+
+  // Clean UI button click
+  playButtonTap() {
+    if (this.sfxMuted) return;
+    this.initCtx();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(600, now);
+    osc.frequency.exponentialRampToValueAtTime(200, now + 0.03);
+
+    gain.gain.setValueAtTime(0.15 * this.sfxVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+
   // Incoming chat message pop
   playMessageReceived() {
     if (this.sfxMuted) return;
