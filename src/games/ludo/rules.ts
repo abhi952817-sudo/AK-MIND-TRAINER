@@ -14,33 +14,36 @@ import {
   isSafeTrackIndex,
   toTrackIndex,
 } from './board';
+import {
+  TeamMode,
+  isTeammate,
+  getControllableTokensForTurn,
+} from './teamRules';
 
 /**
  * Returns a set of global track indices (0..51) where an opponent of playerIndex has formed a blockade.
- * A blockade is formed when 2 or more tokens belonging to the same player occupy the same main track cell.
+ * A blockade is formed when 2 or more tokens belonging to the opposing team/player occupy the same main track cell.
  */
 export function getEnemyBlockadeTrackIndices(
   state: GameState,
-  playerIndex: number
+  playerIndex: number,
+  teamMode: TeamMode = 'individual'
 ): Set<number> {
   const blockades = new Set<number>();
-  const playerTrackCounts = new Map<number, Map<number, number>>();
+  const opponentTrackCounts = new Map<number, number>();
 
   for (const token of state.tokens) {
-    if (token.playerIndex === playerIndex) continue; // friendly token, not enemy
+    // Teammate or self tokens do not create enemy blockades
+    if (isTeammate(playerIndex, token.playerIndex, teamMode, state.players.length)) {
+      continue;
+    }
     if (token.position < 0 || token.position > 50) continue; // must be on shared main track
 
     const trackIdx = toTrackIndex(token.playerIndex, token.position);
     if (trackIdx === null) continue;
 
-    let trackMap = playerTrackCounts.get(token.playerIndex);
-    if (!trackMap) {
-      trackMap = new Map<number, number>();
-      playerTrackCounts.set(token.playerIndex, trackMap);
-    }
-
-    const currentCount = (trackMap.get(trackIdx) ?? 0) + 1;
-    trackMap.set(trackIdx, currentCount);
+    const currentCount = (opponentTrackCounts.get(trackIdx) ?? 0) + 1;
+    opponentTrackCounts.set(trackIdx, currentCount);
     if (currentCount >= 2) {
       blockades.add(trackIdx);
     }
@@ -78,7 +81,8 @@ export function isBlockadeAtTrackIndex(
 export function canTokenMove(
   token: Token,
   dice: DiceValue,
-  state?: GameState
+  state?: GameState,
+  teamMode: TeamMode = 'individual'
 ): boolean {
   // Already won — can't move
   if (token.position === WIN_POSITION) return false;
@@ -87,7 +91,7 @@ export function canTokenMove(
   if (token.position === -1) {
     if (dice !== 6) return false;
     if (state) {
-      const enemyBlockades = getEnemyBlockadeTrackIndices(state, token.playerIndex);
+      const enemyBlockades = getEnemyBlockadeTrackIndices(state, token.playerIndex, teamMode);
       const startTrackIdx = toTrackIndex(token.playerIndex, 0);
       if (startTrackIdx !== null && enemyBlockades.has(startTrackIdx)) {
         return false;
@@ -102,7 +106,7 @@ export function canTokenMove(
 
   // If state is provided, check intermediate steps and destination for enemy blockades
   if (state) {
-    const enemyBlockades = getEnemyBlockadeTrackIndices(state, token.playerIndex);
+    const enemyBlockades = getEnemyBlockadeTrackIndices(state, token.playerIndex, teamMode);
     if (enemyBlockades.size > 0) {
       for (let s = token.position + 1; s <= target; s++) {
         if (s <= 50) {
@@ -119,14 +123,16 @@ export function canTokenMove(
 }
 
 /**
- * All tokens belonging to the currently active player that can move.
+ * All tokens belonging to the currently active player (or teammate if finished) that can move.
  */
-export function getMovableTokens(state: GameState): Token[] {
+export function getMovableTokens(
+  state: GameState,
+  teamMode: TeamMode = 'individual'
+): Token[] {
   if (state.diceValue === null) return [];
-  return state.tokens.filter(
-    (t) =>
-      t.playerIndex === state.activePlayerIndex &&
-      canTokenMove(t, state.diceValue as DiceValue, state)
+  const controllable = getControllableTokensForTurn(state, teamMode);
+  return controllable.filter((t) =>
+    canTokenMove(t, state.diceValue as DiceValue, state, teamMode)
   );
 }
 
@@ -137,9 +143,10 @@ export function getMovableTokens(state: GameState): Token[] {
 export function computeMove(
   state: GameState,
   token: Token,
-  dice: DiceValue
+  dice: DiceValue,
+  teamMode: TeamMode = 'individual'
 ): MoveOption | null {
-  if (!canTokenMove(token, dice, state)) return null;
+  if (!canTokenMove(token, dice, state, teamMode)) return null;
 
   const from = token.position;
   let to: number;
@@ -161,6 +168,10 @@ export function computeMove(
     if (myTrackIdx !== null && !isSafeTrackIndex(myTrackIdx)) {
       for (const other of state.tokens) {
         if (other.playerIndex === token.playerIndex) continue;
+        // In team mode: Teammates CANNOT be captured!
+        if (isTeammate(token.playerIndex, other.playerIndex, teamMode, state.players.length)) {
+          continue;
+        }
         if (other.position < 0 || other.position > 50) continue;
 
         const otherTrackIdx = toTrackIndex(other.playerIndex, other.position);
@@ -190,12 +201,18 @@ export const calculateMove = computeMove;
 /**
  * All legal moves for the active player with the current dice value.
  */
-export function getLegalMoves(state: GameState): MoveOption[] {
+export function getLegalMoves(
+  state: GameState,
+  teamMode: TeamMode = 'individual'
+): MoveOption[] {
   if (state.diceValue === null) return [];
+  // Three consecutive sixes penalty: forfeit turn, zero legal moves
+  if (state.consecutiveSixes >= 3 && state.diceValue === 6) return [];
+
   const dice = state.diceValue;
   const moves: MoveOption[] = [];
-  for (const token of getMovableTokens(state)) {
-    const move = computeMove(state, token, dice);
+  for (const token of getMovableTokens(state, teamMode)) {
+    const move = computeMove(state, token, dice, teamMode);
     if (move) moves.push(move);
   }
   return moves;

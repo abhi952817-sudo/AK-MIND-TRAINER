@@ -19,6 +19,7 @@ import { AdBanner } from './components/ludoverse/ads/AdBanner';
 import { RewardedAdModal } from './components/ludoverse/ads/RewardedAdModal';
 import { InterstitialAdModal } from './components/ludoverse/ads/InterstitialAdModal';
 import { SoundSettingsModal } from './components/ludoverse/SoundSettingsModal';
+import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { toast } from './components/ludoverse/UIComponents';
 
 export default function App() {
@@ -28,7 +29,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [roomCode, setRoomCode] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
-  const [initialBoardType, setInitialBoardType] = useState<'classic' | 'octagon'>('classic');
+  const [initialBoardType, setInitialBoardType] = useState<'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon'>('classic');
   const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
 
   // Coins state — starts as null (no fake data)
@@ -64,8 +65,17 @@ export default function App() {
               if (gId === 'ludo') {
                 setInitialBoardType('classic');
                 setScreen('game');
+              } else if (gId === 'ludojodi') {
+                setInitialBoardType('jodi');
+                setScreen('game');
+              } else if (gId === 'ludo6') {
+                setInitialBoardType('hexagon');
+                setScreen('game');
               } else if (gId === 'ludo8') {
                 setInitialBoardType('octagon');
+                setScreen('game');
+              } else if (gId === 'ludo10') {
+                setInitialBoardType('decagon');
                 setScreen('game');
               } else if (gId === 'snakes_ladders') {
                 setScreen('snakes');
@@ -164,6 +174,8 @@ export default function App() {
         open={soundSettingsOpen}
         onClose={() => setSoundSettingsOpen(false)}
       />
+
+      <OfflineIndicator />
     </div>
   );
 }

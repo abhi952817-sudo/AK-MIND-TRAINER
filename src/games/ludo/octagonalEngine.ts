@@ -231,6 +231,11 @@ export function computeOctagonMove(
 export function getOctagonLegalMoves(state: OctagonGameState): OctagonMoveOption[] {
   if (state.diceValue === null || state.phase !== 'selecting') return [];
 
+  // Consecutive three sixes penalty: zero legal moves allowed
+  if (state.consecutiveSixes >= 3 && state.diceValue === 6) {
+    return [];
+  }
+
   const moves: OctagonMoveOption[] = [];
   const currentTokens = state.tokens.filter((t) => t.playerIndex === state.activePlayerIndex);
 
@@ -240,6 +245,30 @@ export function getOctagonLegalMoves(state: OctagonGameState): OctagonMoveOption
   }
 
   return moves;
+}
+
+export function findNextActiveOctagonPlayer(
+  players: OctagonPlayer[],
+  currentSectorIdx: number,
+  finishOrder: number[]
+): number {
+  const n = players.length;
+  if (n === 0) return currentSectorIdx;
+
+  const currentIdx = players.findIndex((p) => p.sectorIndex === currentSectorIdx);
+  let nextIdx = (currentIdx + 1) % n;
+  let guard = 0;
+
+  while (guard < n) {
+    const sector = players[nextIdx]?.sectorIndex;
+    if (sector !== undefined && !finishOrder.includes(sector)) {
+      return sector;
+    }
+    nextIdx = (nextIdx + 1) % n;
+    guard++;
+  }
+
+  return currentSectorIdx;
 }
 
 /**
@@ -290,10 +319,7 @@ export function applyOctagonMove(state: OctagonGameState, tokenId: string): Octa
     nextPlayer = state.activePlayerIndex;
     nextSixes = state.diceValue === 6 ? state.consecutiveSixes : 0;
   } else {
-    // Pass to next active player in roster
-    const currentRosterIdx = state.players.findIndex((p) => p.sectorIndex === state.activePlayerIndex);
-    const nextRosterIdx = (currentRosterIdx + 1) % state.players.length;
-    nextPlayer = state.players[nextRosterIdx]?.sectorIndex ?? 0;
+    nextPlayer = findNextActiveOctagonPlayer(state.players, state.activePlayerIndex, finishOrder);
     nextSixes = 0;
   }
 

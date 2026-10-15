@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Mail, Lock, ArrowLeft } from 'lucide-react';
 import { Button, TextField, ErrorBanner } from './UIComponents';
 import { ScreenStateMode } from '../../types/ludoverse';
+import { auth, signInWithEmailAndPassword } from '../../services/firebaseAuth';
 
 interface LoginScreenProps {
   onSignIn?: (email: string) => void;
@@ -99,7 +100,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     !validateEmail(email) &&
     !validatePassword(password);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const emailErr = validateEmail(email);
     const passErr = validatePassword(password);
@@ -109,11 +110,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
     if (!emailErr && !passErr) {
       setIsSubmitting(true);
       setAuthError(null);
-      setTimeout(() => {
+      try {
+        await signInWithEmailAndPassword(auth, email.trim(), password);
         setIsSubmitting(false);
         if (onLogin) onLogin();
         if (onSignIn) onSignIn(email);
-      }, 1000);
+      } catch (err: any) {
+        setIsSubmitting(false);
+        setAuthError(err.message || 'Failed to sign in. Please check your credentials.');
+      }
     } else {
       setAuthError('Please resolve the errors below.');
     }

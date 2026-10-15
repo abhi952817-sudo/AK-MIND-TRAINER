@@ -25,7 +25,9 @@ export interface SoundEventDescriptor {
   action: () => void;
 }
 
-const STORAGE_KEY = 'ak_mind_trainer_audio_settings';
+export const PRIMARY_STORAGE_KEY = 'ak_audio_settings';
+export const LEGACY_STORAGE_KEY = 'ak_mind_trainer_audio_settings';
+const STORAGE_KEY = PRIMARY_STORAGE_KEY;
 
 class SoundSynthesizer {
   private ctx: AudioContext | null = null;
@@ -172,22 +174,26 @@ class SoundSynthesizer {
     return this.voiceChatEnabled;
   }
 
-  private saveSettings() {
+  public saveSettings() {
     if (typeof window === 'undefined') return;
     try {
       const data = this.getSettings();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      // Backwards compatibility with previous keys
+      const raw = JSON.stringify(data);
+      // Persist to both primary and legacy keys simultaneously
+      localStorage.setItem(PRIMARY_STORAGE_KEY, raw);
+      localStorage.setItem(LEGACY_STORAGE_KEY, raw);
+      // Backwards compatibility with previous individual volume keys
       localStorage.setItem('ak_ludo_sfx_vol', String(Math.round(this.sfxVolume * 100)));
       localStorage.setItem('ak_ludo_bgm_vol', String(Math.round(this.bgmVolume * 100)));
       localStorage.setItem('ak_ludo_ambient_vol', String(Math.round(this.ambientVolume * 100)));
     } catch {}
   }
 
-  private loadSettings() {
+  public loadSettings() {
     if (typeof window === 'undefined') return;
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      // Check primary key first, fallback to legacy key
+      const saved = localStorage.getItem(PRIMARY_STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (typeof parsed.masterVolume === 'number') this.masterVolume = parsed.masterVolume;
@@ -199,7 +205,7 @@ class SoundSynthesizer {
         if (typeof parsed.ambientMuted === 'boolean') this.ambientMuted = parsed.ambientMuted;
         if (typeof parsed.hapticsEnabled === 'boolean') this.hapticsEnabled = parsed.hapticsEnabled;
       } else {
-        // Fallback to legacy keys if present
+        // Fallback to legacy individual keys if present
         const sfx = localStorage.getItem('ak_ludo_sfx_vol');
         const bgm = localStorage.getItem('ak_ludo_bgm_vol');
         const amb = localStorage.getItem('ak_ludo_ambient_vol');
@@ -335,6 +341,10 @@ class SoundSynthesizer {
       osc.start(t);
       osc.stop(t + 0.2);
     });
+  }
+
+  playSixSound() {
+    this.playDiceSixBonus();
   }
 
   // 5. Token released from yard base onto the starting track

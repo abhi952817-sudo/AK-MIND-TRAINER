@@ -14,6 +14,7 @@ import {
   createOctagonInitialState,
   getOctagonLegalMoves,
 } from './octagonalEngine';
+import { soundEngine } from '../../utils/audio';
 
 export interface UseOctagonalLudoOptions {
   autoPlayBots?: boolean;
@@ -62,19 +63,26 @@ export function useOctagonalLudo(
   }, [activePlayer, humanId]);
 
   // Core Roll action
+  // Core Roll action
   const performRoll = useCallback(async (forBot: boolean) => {
     if (rollLock.current) return;
     const s = stateRef.current;
     if (s.phase !== 'waiting' || s.winner !== null) return;
 
     rollLock.current = true;
+    soundEngine.playDiceRattle();
     setState((prev) => ({ ...prev, phase: 'rolling' }));
 
-    // Rolling animation time
-    await new Promise((r) => setTimeout(r, 1200));
+    // Snappy rolling animation time
+    await new Promise((r) => setTimeout(r, 700));
 
     // Roll random 1..6
     const rollVal = 1 + Math.floor(Math.random() * 6);
+    soundEngine.playDiceLand();
+    if (rollVal === 6) {
+      soundEngine.playDiceSixBonus();
+    }
+
     let consecutive = stateRef.current.consecutiveSixes;
     if (rollVal === 6) consecutive++;
     else consecutive = 0;
@@ -88,7 +96,7 @@ export function useOctagonalLudo(
 
     // 3 consecutive sixes forfeit rule
     if (consecutive === 3 && rollVal === 6) {
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 400));
       const currentRosterIdx = next.players.findIndex((p) => p.sectorIndex === next.activePlayerIndex);
       const nextRosterIdx = (currentRosterIdx + 1) % next.players.length;
       next = {
@@ -103,12 +111,10 @@ export function useOctagonalLudo(
       return;
     }
 
-    setState(next);
-
     // Auto-pass if no legal moves
     const legal = getOctagonLegalMoves(next);
     if (legal.length === 0) {
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 400));
       const currentRosterIdx = next.players.findIndex((p) => p.sectorIndex === next.activePlayerIndex);
       const nextRosterIdx = (currentRosterIdx + 1) % next.players.length;
       next = {
@@ -118,9 +124,9 @@ export function useOctagonalLudo(
         consecutiveSixes: 0,
         phase: 'waiting',
       };
-      setState(next);
     }
 
+    setState(next);
     rollLock.current = false;
   }, []);
 
@@ -134,12 +140,11 @@ export function useOctagonalLudo(
     botLock.current = true;
 
     (async () => {
-      // Bot rolls after short thinking delay
-      await new Promise((r) => setTimeout(r, 650));
+      soundEngine.playBotThinking();
+      await new Promise((r) => setTimeout(r, 500));
       await performRoll(true);
 
-      // Bot selects move after roll
-      await new Promise((r) => setTimeout(r, 550));
+      await new Promise((r) => setTimeout(r, 400));
       const currentSt = stateRef.current;
       if (currentSt.phase === 'selecting' && currentSt.activePlayerIndex === cur.sectorIndex) {
         const legal = getOctagonLegalMoves(currentSt);
@@ -151,7 +156,24 @@ export function useOctagonalLudo(
             return b.to - a.to;
           });
           const bestMove = legal[0];
+          if (bestMove.captures.length > 0) {
+            soundEngine.playTokenCapture();
+          } else if (bestMove.reachesHome) {
+            soundEngine.playTokenHomeTriumph();
+          } else if (bestMove.exitsBase) {
+            soundEngine.playTokenRelease();
+          }
           setState((prev) => applyOctagonMove(prev, bestMove.tokenId));
+        } else {
+          const currentRosterIdx = currentSt.players.findIndex((p) => p.sectorIndex === currentSt.activePlayerIndex);
+          const nextRosterIdx = (currentRosterIdx + 1) % currentSt.players.length;
+          setState((prev) => ({
+            ...prev,
+            activePlayerIndex: prev.players[nextRosterIdx]?.sectorIndex ?? 0,
+            diceValue: null,
+            consecutiveSixes: 0,
+            phase: 'waiting',
+          }));
         }
       }
       botLock.current = false;

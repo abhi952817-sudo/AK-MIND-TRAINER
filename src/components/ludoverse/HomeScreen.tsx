@@ -1,13 +1,16 @@
 import React from 'react';
 import { COLORS, StateMode, ScreenStateMode, User, UserProfile } from '../../types/ludoverse';
 import { Avatar, Skeleton, CoinBadge, toast } from './UIComponents';
+import { PWAInstallButton } from '../pwa/PWAInstallButton';
 
 const GAMES = [
   { id: 'ludo', name: 'Ludo Classic (4P)', icon: '🎲', color: '#E85A0C', active: true },
+  { id: 'ludojodi', name: 'Jodi 2v2 (Team Mode)', icon: '🤝', color: '#2563EB', active: true },
+  { id: 'ludo6', name: 'Hexagon Ludo (6P)', icon: '⬡', color: '#10B981', active: true },
   { id: 'ludo8', name: 'Octagon Ludo (8P)', icon: '🔷', color: '#0055D4', active: true },
+  { id: 'ludo10', name: 'Decagon Ludo (10P)', icon: '⭐', color: '#7C3AED', active: true },
   { id: 'snake', name: 'Snakes & Ladders', icon: '🐍', color: COLORS.green, active: true },
   { id: 'spin', name: 'Lucky Spin', icon: '🎡', color: COLORS.yellow, active: true },
-  { id: 'more', name: 'More Games', icon: '🎮', color: '#8D99AE', active: false },
 ];
 
 export const HomeScreen: React.FC<{
@@ -59,8 +62,8 @@ export const HomeScreen: React.FC<{
 
   const handleGame = (id: string) => {
     if (id === 'ludo') return handleLudo();
-    if (id === 'ludo8') {
-      if (onSelectGame) onSelectGame('ludo8');
+    if (id === 'ludojodi' || id === 'ludo6' || id === 'ludo8' || id === 'ludo10') {
+      if (onSelectGame) onSelectGame(id);
       else handleLudo();
       return;
     }
@@ -80,9 +83,12 @@ export const HomeScreen: React.FC<{
         </div>
       </div>
 
-      <div className="px-4 mt-2 mb-6 shrink-0">
-        <h2 className="font-semibold text-2xl text-white">{greeting}</h2>
-        <p className="text-sm mt-1" style={{ color: COLORS.textSecondary }}>Ready to play?</p>
+      <div className="px-4 mt-2 mb-4 shrink-0 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-2xl text-white">{greeting}</h2>
+          <p className="text-sm mt-0.5" style={{ color: COLORS.textSecondary }}>Ready to play?</p>
+        </div>
+        <PWAInstallButton variant="compact" />
       </div>
 
       <div className="px-4 grid grid-cols-2 gap-4 flex-1 overflow-y-auto pb-6 no-scrollbar">

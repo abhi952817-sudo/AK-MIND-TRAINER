@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, User, Mail, Lock } from 'lucide-react';
 import { Button, TextField, ErrorBanner } from './UIComponents';
 import { ScreenStateMode } from '../../types/ludoverse';
+import { auth, createUserWithEmailAndPassword, updateProfile } from '../../services/firebaseAuth';
 
 interface SignupScreenProps {
   onSignUp?: (name: string, email: string) => void;
@@ -115,7 +116,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     confirmPassword === password &&
     agreeTerms;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const nameErr = validateName(fullName);
     const emailErr = validateEmail(email);
@@ -135,11 +136,18 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({
     if (!nameErr && !emailErr && !passErr && !confErr && agreeTerms) {
       setIsSubmitting(true);
       setAuthError(null);
-      setTimeout(() => {
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+        if (userCredential.user) {
+          await updateProfile(userCredential.user, { displayName: fullName.trim() });
+        }
         setIsSubmitting(false);
         if (onSignup) onSignup();
         if (onSignUp) onSignUp(fullName, email);
-      }, 1000);
+      } catch (err: any) {
+        setIsSubmitting(false);
+        setAuthError(err.message || 'Failed to create account. Please try again.');
+      }
     }
   };
 

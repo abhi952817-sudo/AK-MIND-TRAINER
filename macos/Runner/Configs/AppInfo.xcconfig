@@ -1,0 +1,8 @@
+// Application-level settings for the Runner Target on macOS.
+//
+// This may be replaced with something auto-generated from metadata (e.g., pubspec.yaml) in the
+// future. If not, the values below would default to using the project name as the bundle identifier.
+
+PRODUCT_NAME = akmindtrainer
+PRODUCT_BUNDLE_IDENTIFIER = com.akmindtrainer.ludoverse.macos
+PRODUCT_COPYRIGHT = Copyright © 2026 AK Mind Trainer. All rights reserved.

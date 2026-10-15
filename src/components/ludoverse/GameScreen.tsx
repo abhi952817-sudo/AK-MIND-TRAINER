@@ -1,23 +1,41 @@
 // src/components/ludoverse/GameScreen.tsx
-// Comprehensive Ludo Arena supporting both Classic 4-Player Wooden Board
-// and Grand 8-Player Octagonal Board with path previews, 3D dice, and full rules.
+// Comprehensive Ludo Arena supporting 2 to 10 players, Jodi 2v2 partnership mode,
+// strict 8-player octagonal board, and 10-player decagonal board with 23-event audio.
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { COLORS, PLAYER_COLORS, StateMode, ScreenStateMode } from '../../types/ludoverse';
-import { Avatar, ConfirmDialog } from './UIComponents';
+import { ConfirmDialog } from './UIComponents';
 import { Dice3DCube } from './Dice3DCube';
 import { LudoBoard } from '../../games/ludo/LudoBoard';
 import { useLudo } from '../../games/ludo/useLudo';
 import { Player } from '../../games/ludo/types';
-import { WIN_POSITION } from '../../games/ludo/board';
 import { soundEngine } from '../../utils/audio';
 import { haptics } from '../../utils/haptics';
+import { SoundSettingsModal } from './SoundSettingsModal';
+import { TeamMode, getTeamsForMatch, hasPlayerFinishedAllTokens } from '../../games/ludo/teamRules';
+
+// 6-Player Hexagonal Board imports
+import { HexagonalLudoBoard } from '../../games/ludo/HexagonalLudoBoard';
+import { useHexagonalLudo } from '../../games/ludo/useHexagonalLudo';
+import { HEXAGON_SECTORS } from '../../games/ludo/hexagonalBoard';
+import { HexagonPlayer } from '../../games/ludo/hexagonalEngine';
 
 // 8-Player Octagonal Board imports
 import { OctagonalLudoBoard } from '../../games/ludo/OctagonalLudoBoard';
 import { useOctagonalLudo } from '../../games/ludo/useOctagonalLudo';
 import { OCTAGON_SECTORS } from '../../games/ludo/octagonalBoard';
 import { OctagonPlayer } from '../../games/ludo/octagonalEngine';
+
+// 10-Player Decagonal Board imports
+import { DecagonalLudoBoard } from '../../games/ludo/DecagonalLudoBoard';
+import { useDecagonalLudo } from '../../games/ludo/useDecagonalLudo';
+import { DECAGON_SECTORS } from '../../games/ludo/decagonalBoard';
+import { DecagonPlayer } from '../../games/ludo/decagonalEngine';
+
+// Match Setup Lobby Modal
+import { MatchSetupModal, MatchSetupResult, SeatConfig } from './MatchSetupModal';
+
+export type MatchMode = 'classic' | 'jodi' | 'hexagon' | 'octagon' | 'decagon' | 'duel';
 
 const FOUR_PLAYERS: Player[] = [
   { uid: 'you',   name: 'You',      color: 'blue',   index: 0, isBot: false, isHost: true,  isReady: true, isOnline: true },
@@ -31,8 +49,31 @@ const TWO_PLAYERS: Player[] = [
   { uid: 'bot2',  name: 'Marcus',   color: 'green',  index: 2, isBot: true,  isHost: false, isReady: true, isOnline: true },
 ];
 
-// Default 8-Player Roster for Octagonal Board
+// Standard 6-Player Roster for Hexagonal Board
+const ALL_SIX_PLAYERS: HexagonPlayer[] = HEXAGON_SECTORS.map((sec, idx) => ({
+  id: idx === 0 ? 'you' : `bot-${idx}`,
+  name: idx === 0 ? 'You' : `${sec.name} Bot`,
+  sectorIndex: sec.index,
+  color: sec.color,
+  label: sec.label,
+  isBot: idx !== 0,
+  isHost: idx === 0,
+  botDifficulty: 'normal',
+}));
+
+// Strict 8-Player Roster for Octagonal Board
 const ALL_EIGHT_PLAYERS: OctagonPlayer[] = OCTAGON_SECTORS.map((sec, idx) => ({
+  id: idx === 0 ? 'you' : `bot-${idx}`,
+  name: idx === 0 ? 'You' : `${sec.name} Bot`,
+  sectorIndex: sec.index,
+  color: sec.color,
+  label: sec.label,
+  isBot: idx !== 0,
+  isHost: idx === 0,
+}));
+
+// Strict 10-Player Roster for Decagonal Board
+const ALL_TEN_PLAYERS: DecagonPlayer[] = DECAGON_SECTORS.map((sec, idx) => ({
   id: idx === 0 ? 'you' : `bot-${idx}`,
   name: idx === 0 ? 'You' : `${sec.name} Bot`,
   sectorIndex: sec.index,
@@ -51,7 +92,10 @@ interface GameScreenProps {
   state?: StateMode | ScreenStateMode;
   players?: Player[];
   humanUid?: string;
-  initialBoardType?: 'classic' | 'octagon';
+  initialBoardType?: 'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon';
+  initialMatchMode?: MatchMode;
+  customSeats?: SeatConfig[];
+  onOpenSetup?: () => void;
 }
 
 export const GameScreen: React.FC<GameScreenProps> = ({
@@ -62,16 +106,27 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   onOpenSettings,
   humanUid = 'you',
   initialBoardType = 'classic',
+  initialMatchMode,
+  customSeats,
 }) => {
-  // Board type state: 'classic' (4P square wood) | 'octagon' (8P grand octagon)
-  const [boardType, setBoardType] = useState<'classic' | 'octagon'>(initialBoardType);
-  const [playerMode, setPlayerMode] = useState<2 | 4 | 8>(initialBoardType === 'octagon' ? 8 : 4);
+  const [matchMode, setMatchMode] = useState<MatchMode>(() => {
+    if (initialMatchMode) return initialMatchMode;
+    if (initialBoardType === 'hexagon') return 'hexagon';
+    if (initialBoardType === 'octagon') return 'octagon';
+    if (initialBoardType === 'jodi') return 'jodi';
+    if (initialBoardType === 'decagon') return 'decagon';
+    if (initialBoardType === 'duel') return 'duel';
+    return 'classic';
+  });
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [activeSeats, setActiveSeats] = useState<SeatConfig[] | undefined>(customSeats);
   const [passAndPlay, setPassAndPlay] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
 
   // Background gameplay music lifecycle & arena start chime
   useEffect(() => {
@@ -99,35 +154,82 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   };
 
   // =========================================================================
-  // 1. CLASSIC 4-PLAYER ENGINE SETUP
+  // 1. CLASSIC & JODI ENGINE SETUP
   // =========================================================================
   const classicPlayers = useMemo(() => {
-    const base = playerMode === 2 ? TWO_PLAYERS : FOUR_PLAYERS;
+    const base = matchMode === 'duel' ? TWO_PLAYERS : FOUR_PLAYERS;
+    if (activeSeats && activeSeats.length >= (matchMode === 'duel' ? 2 : 4)) {
+      return base.map((p, i) => {
+        const s = activeSeats[i];
+        if (!s) return p;
+        return {
+          ...p,
+          name: s.name || p.name,
+          isBot: passAndPlay ? false : s.isBot,
+        };
+      });
+    }
     if (passAndPlay) return base.map((p) => ({ ...p, isBot: false }));
     return base;
-  }, [playerMode, passAndPlay]);
+  }, [matchMode, passAndPlay, activeSeats]);
+
+  const teamMode: TeamMode = matchMode === 'jodi' ? 'jodi_2v2' : 'individual';
 
   const classicGame = useLudo(
     classicPlayers,
+    { autoPlayBots: !passAndPlay, teamMode },
+    passAndPlay ? undefined : humanUid
+  );
+
+  // =========================================================================
+  // 2. 6-PLAYER HEXAGON ENGINE
+  // =========================================================================
+  const hexagonPlayers = useMemo(() => {
+    if (activeSeats && activeSeats.length === 6) {
+      return ALL_SIX_PLAYERS.map((p, i) => {
+        const s = activeSeats[i];
+        if (!s) return p;
+        return {
+          ...p,
+          name: s.name || p.name,
+          isBot: passAndPlay ? false : s.isBot,
+          botDifficulty: s.botDifficulty,
+        };
+      });
+    }
+    if (passAndPlay) {
+      return ALL_SIX_PLAYERS.map((p) => ({ ...p, isBot: false }));
+    }
+    return ALL_SIX_PLAYERS;
+  }, [passAndPlay, activeSeats]);
+
+  const hexagonGame = useHexagonalLudo(
+    hexagonPlayers,
     { autoPlayBots: !passAndPlay },
     passAndPlay ? undefined : humanUid
   );
 
   // =========================================================================
-  // 2. OCTAGONAL 8-PLAYER ENGINE SETUP
+  // 3. STRICT 8-PLAYER OCTAGON ENGINE
   // =========================================================================
   const octagonPlayers = useMemo(() => {
-    let base = ALL_EIGHT_PLAYERS;
-    if (playerMode === 2) {
-      base = [ALL_EIGHT_PLAYERS[0], ALL_EIGHT_PLAYERS[4]]; // 01 Blue vs 05 Yellow
-    } else if (playerMode === 4) {
-      base = [ALL_EIGHT_PLAYERS[0], ALL_EIGHT_PLAYERS[2], ALL_EIGHT_PLAYERS[4], ALL_EIGHT_PLAYERS[6]];
+    if (activeSeats && activeSeats.length === 8) {
+      return ALL_EIGHT_PLAYERS.map((p, i) => {
+        const s = activeSeats[i];
+        if (!s) return p;
+        return {
+          ...p,
+          name: s.name || p.name,
+          isBot: passAndPlay ? false : s.isBot,
+          botDifficulty: s.botDifficulty,
+        };
+      });
     }
     if (passAndPlay) {
-      return base.map((p) => ({ ...p, isBot: false }));
+      return ALL_EIGHT_PLAYERS.map((p) => ({ ...p, isBot: false }));
     }
-    return base;
-  }, [playerMode, passAndPlay]);
+    return ALL_EIGHT_PLAYERS;
+  }, [passAndPlay, activeSeats]);
 
   const octagonGame = useOctagonalLudo(
     octagonPlayers,
@@ -135,13 +237,79 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     passAndPlay ? undefined : humanUid
   );
 
+  // =========================================================================
+  // 4. 10-PLAYER DECAGON ENGINE
+  // =========================================================================
+  const decagonPlayers = useMemo(() => {
+    if (activeSeats && activeSeats.length === 10) {
+      return ALL_TEN_PLAYERS.map((p, i) => {
+        const s = activeSeats[i];
+        if (!s) return p;
+        return {
+          ...p,
+          name: s.name || p.name,
+          isBot: passAndPlay ? false : s.isBot,
+          botDifficulty: s.botDifficulty,
+        };
+      });
+    }
+    if (passAndPlay) {
+      return ALL_TEN_PLAYERS.map((p) => ({ ...p, isBot: false }));
+    }
+    return ALL_TEN_PLAYERS;
+  }, [passAndPlay, activeSeats]);
+
+  const decagonGame = useDecagonalLudo(
+    decagonPlayers,
+    { autoPlayBots: !passAndPlay },
+    passAndPlay ? undefined : humanUid
+  );
+
   // Active Game State Router
-  const isOctagon = boardType === 'octagon';
-  const activeDiceVal = isOctagon ? octagonGame.state.diceValue : classicGame.state.diceValue;
-  const activeIsRolling = isOctagon ? octagonGame.isRolling : classicGame.isRolling;
-  const activeTimeLeft = isOctagon ? octagonGame.timeLeft : classicGame.timeLeft;
-  const activeIsHumanTurn = isOctagon ? octagonGame.isHumanTurn : classicGame.isHumanTurn;
-  const activePhase = isOctagon ? octagonGame.state.phase : classicGame.state.phase;
+  const isHexagon = matchMode === 'hexagon';
+  const isOctagon = matchMode === 'octagon';
+  const isDecagon = matchMode === 'decagon';
+  const isClassicLike = !isHexagon && !isOctagon && !isDecagon;
+
+  const activeDiceVal = isOctagon
+    ? octagonGame.state.diceValue
+    : isDecagon
+    ? decagonGame.state.diceValue
+    : isHexagon
+    ? hexagonGame.state.diceValue
+    : classicGame.state.diceValue;
+
+  const activeIsRolling = isOctagon
+    ? octagonGame.isRolling
+    : isDecagon
+    ? decagonGame.isRolling
+    : isHexagon
+    ? hexagonGame.isRolling
+    : classicGame.isRolling;
+
+  const activeTimeLeft = isOctagon
+    ? octagonGame.timeLeft
+    : isDecagon
+    ? decagonGame.timeLeft
+    : isHexagon
+    ? hexagonGame.timeLeft
+    : classicGame.timeLeft;
+
+  const activeIsHumanTurn = isOctagon
+    ? octagonGame.isHumanTurn
+    : isDecagon
+    ? decagonGame.isHumanTurn
+    : isHexagon
+    ? hexagonGame.isHumanTurn
+    : classicGame.isHumanTurn;
+
+  const activePhase = isOctagon
+    ? octagonGame.state.phase
+    : isDecagon
+    ? decagonGame.state.phase
+    : isHexagon
+    ? hexagonGame.state.phase
+    : classicGame.state.phase;
 
   // Active color for dice ring and badges
   const activeColorHex = useMemo(() => {
@@ -149,32 +317,70 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       const cur = octagonGame.state.players.find((p) => p.sectorIndex === octagonGame.state.activePlayerIndex);
       return cur?.color ?? '#0055D4';
     }
+    if (isDecagon) {
+      const cur = decagonGame.state.players.find((p) => p.sectorIndex === decagonGame.state.activePlayerIndex);
+      return cur?.color ?? '#0055D4';
+    }
+    if (isHexagon) {
+      const cur = hexagonGame.state.players.find((p) => p.sectorIndex === hexagonGame.state.activePlayerIndex);
+      return cur?.color ?? '#0055D4';
+    }
     const cur = classicGame.state.players[classicGame.state.activePlayerIndex];
     return PLAYER_COLORS[cur?.color ?? 'blue'] || COLORS.blue;
-  }, [isOctagon, octagonGame.state, classicGame.state]);
+  }, [isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
 
   const activePlayerName = useMemo(() => {
     if (isOctagon) {
       const cur = octagonGame.state.players.find((p) => p.sectorIndex === octagonGame.state.activePlayerIndex);
       return cur?.name ?? `Player ${octagonGame.state.activePlayerIndex + 1}`;
     }
+    if (isDecagon) {
+      const cur = decagonGame.state.players.find((p) => p.sectorIndex === decagonGame.state.activePlayerIndex);
+      return cur?.name ?? `Player ${decagonGame.state.activePlayerIndex + 1}`;
+    }
+    if (isHexagon) {
+      const cur = hexagonGame.state.players.find((p) => p.sectorIndex === hexagonGame.state.activePlayerIndex);
+      return cur?.name ?? `Player ${hexagonGame.state.activePlayerIndex + 1}`;
+    }
     const cur = classicGame.state.players[classicGame.state.activePlayerIndex];
     return cur?.name ?? `Player ${classicGame.state.activePlayerIndex + 1}`;
-  }, [isOctagon, octagonGame.state, classicGame.state]);
+  }, [isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
+
+  // Jodi partner assist detection
+  const isJodiPartnerAssist = useMemo(() => {
+    if (matchMode !== 'jodi') return false;
+    return hasPlayerFinishedAllTokens(classicGame.state, classicGame.state.activePlayerIndex);
+  }, [matchMode, classicGame.state]);
 
   const handleRoll = () => {
     if (isOctagon) octagonGame.roll();
+    else if (isDecagon) decagonGame.roll();
+    else if (isHexagon) hexagonGame.roll();
     else classicGame.roll();
   };
 
   const handleRestart = () => {
     if (isOctagon) octagonGame.restart();
+    else if (isDecagon) decagonGame.restart();
+    else if (isHexagon) hexagonGame.restart();
     else classicGame.restart();
+  };
+
+  const handleSetupComplete = (result: MatchSetupResult) => {
+    setMatchMode(result.matchMode);
+    setActiveSeats(result.seats);
+    setSetupModalOpen(false);
   };
 
   // Turn notification sound & haptic alert
   const prevTurnRef = useRef<number | null>(null);
-  const activeTurn = isOctagon ? octagonGame.state.activePlayerIndex : classicGame.state.activePlayerIndex;
+  const activeTurn = isOctagon
+    ? octagonGame.state.activePlayerIndex
+    : isDecagon
+    ? decagonGame.state.activePlayerIndex
+    : isHexagon
+    ? hexagonGame.state.activePlayerIndex
+    : classicGame.state.activePlayerIndex;
 
   useEffect(() => {
     if (prevTurnRef.current !== activeTurn && activePhase !== 'ended') {
@@ -203,67 +409,160 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     }
   }, [activePhase, soundEnabled]);
 
+  // Cross-platform desktop/macOS keyboard shortcuts: Space to roll, Esc for menu
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.code === 'Space') {
+        const canRoll = (passAndPlay || activeIsHumanTurn) && activePhase === 'waiting' && !activeIsRolling;
+        if (canRoll) {
+          e.preventDefault();
+          handleRoll();
+        }
+      } else if (e.code === 'Escape') {
+        setMenuOpen((m) => !m);
+        setRulesOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [passAndPlay, activeIsHumanTurn, activePhase, activeIsRolling, handleRoll]);
+
   const timerColor =
     activeTimeLeft > 15 ? COLORS.success : activeTimeLeft > 5 ? COLORS.yellow : COLORS.error;
 
   return (
     <div
-      className="w-full h-full flex flex-col relative select-none"
+      className="w-full h-full flex flex-col relative select-none pb-[env(safe-area-inset-bottom)]"
       style={{ background: '#161824', color: '#FFFFFF' }}
     >
       {/* ========================================================= */}
       {/* HEADER: Board Selector & Turn Timer                       */}
       {/* ========================================================= */}
-      <div className="flex items-center justify-between px-3 h-14 shrink-0 bg-[#1E2235]/75 border-b border-white/5 backdrop-blur-xs">
-        {/* Board Switcher Tabs */}
-        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/30 border border-white/10">
+      <div className="flex items-center justify-between px-3 h-14 shrink-0 bg-[#1E2235]/80 border-b border-white/5 backdrop-blur-xs">
+        {/* Match Mode Tabs */}
+        <div className="flex items-center gap-1 p-0.5 rounded-xl bg-black/40 border border-white/10 overflow-x-auto no-scrollbar max-w-[70vw]">
           <button
             type="button"
             onClick={() => {
               soundEngine.playButtonTap();
-              setBoardType('classic');
-              if (playerMode === 8) setPlayerMode(4);
+              setMatchMode('classic');
             }}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              !isOctagon
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'classic'
                 ? 'bg-[#E85A0C] text-white shadow-md'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            🪵 Classic (4P)
+            🪵 Classic 4P
           </button>
+
           <button
             type="button"
             onClick={() => {
               soundEngine.playButtonTap();
-              setBoardType('octagon');
-              setPlayerMode(8);
+              setMatchMode('jodi');
             }}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              isOctagon
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'jodi'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            🤝 Jodi 2v2
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setMatchMode('hexagon');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'hexagon'
+                ? 'bg-teal-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            ⬡ Hexagon 6P
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setMatchMode('octagon');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'octagon'
                 ? 'bg-[#0055D4] text-white shadow-md'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            🔷 Octagon (8P)
+            🔷 Octagon 8P
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setMatchMode('decagon');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'decagon'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            ⭐ Decagon 10P
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setMatchMode('duel');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'duel'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            ⚔️ 2P Duel
           </button>
         </div>
 
-        {/* Right Header Utilities: Sound Settings, Mute Toggle & Circular Timer */}
+        {/* Right Header Utilities: Setup, Settings, Sound & Timer */}
         <div className="flex items-center gap-2">
-          {onOpenSettings && (
-            <button
-              type="button"
-              onClick={() => {
-                soundEngine.playButtonTap();
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setSetupModalOpen(true);
+            }}
+            className="px-2 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-[11px] font-bold text-indigo-200 flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+            title="Match Setup & Custom Seats"
+          >
+            <span>⚙️</span>
+            <span className="hidden sm:inline">Setup</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              if (onOpenSettings) {
                 onOpenSettings();
-              }}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10 cursor-pointer"
-              title="Audio & Sound Settings"
-            >
-              ⚙️
-            </button>
-          )}
+              } else {
+                setSoundSettingsOpen(true);
+              }
+            }}
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-sm transition-colors border border-white/10 cursor-pointer"
+            title="Audio & Sound Settings (23 Classic Events)"
+          >
+            ⚙️
+          </button>
 
           <button
             type="button"
@@ -296,7 +595,23 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         </div>
       </div>
 
-      {/* Turn Banner with Active Player Indicator & Path Guidance */}
+      {/* Jodi 2v2 Team Badges Header */}
+      {matchMode === 'jodi' && (
+        <div className="px-3 py-1 bg-black/30 border-b border-white/5 flex items-center justify-between text-[11px]">
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-blue-300">
+            <span className="w-2 h-2 rounded-full bg-blue-400" />
+            <span className="font-bold">Team Alpha:</span>
+            <span>You (Blue) & Marcus (Green)</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-300">
+            <span className="w-2 h-2 rounded-full bg-red-400" />
+            <span className="font-bold">Team Beta:</span>
+            <span>Samantha (Red) & Devin (Yellow)</span>
+          </div>
+        </div>
+      )}
+
+      {/* Turn Banner with Active Player Indicator & Guidance */}
       <div
         className="text-center text-xs py-1 px-4 shrink-0 font-medium flex items-center justify-center gap-2 border-b border-white/5"
         style={{
@@ -310,7 +625,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         />
         <span className="font-semibold">
           {activePhase === 'ended'
-            ? '🏆 Match Finished!'
+            ? matchMode === 'jodi'
+              ? classicGame.state.winner === 0
+                ? '🏆 Team Alpha (You & Marcus) Wins Jodi Match!'
+                : '🏆 Team Beta (Samantha & Devin) Wins Jodi Match!'
+              : '🏆 Match Finished!'
+            : isJodiPartnerAssist
+            ? `🤝 Partner Assist: ${activePlayerName} is rolling to move partner's token!`
             : passAndPlay || activeIsHumanTurn
             ? activePhase === 'waiting'
               ? `${activePlayerName}: Roll the Dice`
@@ -333,6 +654,22 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             inputLocked={octagonGame.isRolling || (!passAndPlay && !octagonGame.isHumanTurn)}
             size={Math.min(window.innerWidth - 16, 420)}
           />
+        ) : isDecagon ? (
+          <DecagonalLudoBoard
+            state={decagonGame.state}
+            legalMoves={decagonGame.legalMoves}
+            onTokenClick={decagonGame.selectToken}
+            inputLocked={decagonGame.isRolling || (!passAndPlay && !decagonGame.isHumanTurn)}
+            size={Math.min(window.innerWidth - 16, 420)}
+          />
+        ) : isHexagon ? (
+          <HexagonalLudoBoard
+            state={hexagonGame.state}
+            legalMoves={hexagonGame.legalMoves}
+            onTokenClick={hexagonGame.selectToken}
+            inputLocked={hexagonGame.isRolling || (!passAndPlay && !hexagonGame.isHumanTurn)}
+            size={Math.min(window.innerWidth - 16, 420)}
+          />
         ) : (
           <LudoBoard
             state={classicGame.state}
@@ -347,7 +684,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       {/* ========================================================= */}
       {/* BOTTOM CONTROLS & 3D DICE                                 */}
       {/* ========================================================= */}
-      <div className="flex items-center justify-between px-5 pb-5 pt-2 shrink-0 bg-[#1A1D2D]/75 border-t border-white/5">
+      <div className="flex items-center justify-between px-5 pb-5 pt-2 shrink-0 bg-[#1A1D2D]/80 border-t border-white/5">
         {/* Chat Button */}
         <button
           type="button"
@@ -401,47 +738,114 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       {/* MENU MODAL POPUP                                          */}
       {/* ========================================================= */}
       {menuOpen && (
-        <div
-          className="absolute bottom-24 right-4 rounded-[18px] overflow-hidden shadow-2xl z-40 border border-white/15 bg-[#1E2235] w-60"
-        >
+        <div className="absolute bottom-24 right-4 rounded-[18px] overflow-hidden shadow-2xl z-40 border border-white/15 bg-[#1E2235] w-64">
           <div className="px-4 py-3 border-b border-white/10 text-xs font-bold text-gray-400 uppercase tracking-wider">
-            Game Setup
+            Game Setup & Modes
           </div>
 
-          {/* Board Selector */}
-          <button
-            type="button"
-            onClick={() => {
-              const next = isOctagon ? 'classic' : 'octagon';
-              setBoardType(next);
-              if (next === 'octagon') setPlayerMode(8);
-              else setPlayerMode(4);
-              setMenuOpen(false);
-            }}
-            className="w-full px-4 py-3 text-left text-xs font-semibold flex items-center justify-between border-b border-white/10 hover:bg-white/5"
-          >
-            <span>Board Type</span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400">
-              {isOctagon ? '🔷 Octagon 8P' : '🪵 Classic 4P'}
-            </span>
-          </button>
+          {/* Mode Options */}
+          <div className="p-2 space-y-1 border-b border-white/10">
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('classic');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'classic' ? 'bg-[#E85A0C]/20 text-[#FF7A29]' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>🪵 Classic 4P</span>
+              <span className="text-[10px] text-gray-400">FFA</span>
+            </button>
 
-          {/* Player Count */}
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('jodi');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'jodi' ? 'bg-blue-600/20 text-blue-300' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>🤝 Jodi 2v2</span>
+              <span className="text-[10px] text-blue-400 font-bold">Team Partnership</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('hexagon');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'hexagon' ? 'bg-teal-500/20 text-teal-300' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>⬡ Hexagon 6P</span>
+              <span className="text-[10px] text-teal-400">6 Arms</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('octagon');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'octagon' ? 'bg-blue-500/20 text-blue-400' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>🔷 Octagon 8P</span>
+              <span className="text-[10px] text-gray-400">Strict 8P</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('decagon');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'decagon' ? 'bg-purple-500/20 text-purple-300' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>⭐ Decagon 10P</span>
+              <span className="text-[10px] text-purple-400">10 Players</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMatchMode('duel');
+                setMenuOpen(false);
+              }}
+              className={`w-full px-3 py-2 rounded-lg text-left text-xs font-semibold flex items-center justify-between ${
+                matchMode === 'duel' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-300 hover:bg-white/5'
+              }`}
+            >
+              <span>⚔️ 2P Duel</span>
+              <span className="text-[10px] text-gray-400">1v1</span>
+            </button>
+          </div>
+
+          {/* Match Setup & Player Lobby */}
           <button
             type="button"
             onClick={() => {
-              if (isOctagon) {
-                setPlayerMode((m) => (m === 8 ? 4 : m === 4 ? 2 : 8));
-              } else {
-                setPlayerMode((m) => (m === 4 ? 2 : 4));
-              }
+              soundEngine.playButtonTap();
               setMenuOpen(false);
+              setSetupModalOpen(true);
             }}
-            className="w-full px-4 py-3 text-left text-xs font-semibold flex items-center justify-between border-b border-white/10 hover:bg-white/5"
+            className="w-full px-4 py-3 text-left text-xs font-semibold flex items-center justify-between border-b border-white/10 hover:bg-white/5 text-amber-300"
           >
-            <span>Players</span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400">
-              {playerMode} Players
+            <span className="flex items-center gap-2">
+              <span>⚙️</span>
+              <span>Match Setup & Seats</span>
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">
+              Custom Lobby
             </span>
           </button>
 
@@ -461,6 +865,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({
               }`}
             >
               {passAndPlay ? 'ON' : 'OFF'}
+            </span>
+          </button>
+
+          {/* Sound & Audio Settings */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
+              setMenuOpen(false);
+              if (onOpenSettings) {
+                onOpenSettings();
+              } else {
+                setSoundSettingsOpen(true);
+              }
+            }}
+            className="w-full px-4 py-3 text-left text-xs font-semibold flex items-center justify-between border-b border-white/10 hover:bg-white/5 text-white"
+          >
+            <span className="flex items-center gap-2">
+              <span>🔊</span>
+              <span>Sound & Audio Settings</span>
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300">
+              23 Events
             </span>
           </button>
 
@@ -503,7 +930,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* RULES MODAL WITH STEP TRAIL GUIDE                         */}
+      {/* RULES MODAL WITH JODI 2V2 & MULTI-BOARD RULES              */}
       {/* ========================================================= */}
       {rulesOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
@@ -511,7 +938,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <span>📜</span>
-                <span>{isOctagon ? '8-Player Octagonal Rules' : 'Classic Ludo Rules'}</span>
+                <span>
+                  {matchMode === 'jodi'
+                    ? 'Jodi 2v2 Partnership Rules'
+                    : matchMode === 'octagon'
+                    ? 'Strict 8-Player Octagonal Rules'
+                    : matchMode === 'decagon'
+                    ? '10-Player Decagonal Rules'
+                    : 'Classic Ludo Rules'}
+                </span>
               </h3>
               <button
                 type="button"
@@ -523,43 +958,64 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             </div>
 
             <div className="overflow-y-auto py-3 space-y-3 text-xs text-slate-300 leading-relaxed pr-1">
-              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
-                <span className="font-bold text-blue-300 block mb-0.5">🛤️ Live Path Trail Preview:</span>
-                Whenever you roll the dice, tapping or hovering over your glowing token shows a <span className="font-bold text-white">dotted trail with numbers (① ➜ ② ➜ ③...)</span> indicating the exact path and landing spot!
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="font-bold text-white block mb-0.5">🎲 Getting Out of Base:</span>
-                Rolling a <span className="font-bold text-yellow-400">6</span> unlocks your token from base onto the <span className="font-bold text-emerald-400">Start cell</span> and grants an extra roll.
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="font-bold text-white block mb-0.5">🛑 Safe Cells:</span>
-                Tokens on <span className="font-bold text-yellow-400">★ Stop cells</span> and your colored runway cannot be captured.
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="font-bold text-white block mb-0.5">⚔️ Captures & Bonus Rolls:</span>
-                Landing on an opponent sends their token back to base and gives you a bonus roll!
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
-                <span className="font-bold text-white block mb-0.5">👑 Winning the Match:</span>
-                Complete the lap around the {isOctagon ? '8 octagonal sectors' : 'track'} and enter the center victory area with all 4 tokens!
-              </div>
+              {matchMode === 'jodi' ? (
+                <>
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <span className="font-bold text-blue-300 block mb-0.5">🤝 Teammate Partnerships:</span>
+                    Team Alpha (Player 0 Blue & Player 2 Green) vs Team Beta (Player 1 Red & Player 3 Yellow).
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">🛡️ Friendly Safe Guard Block:</span>
+                    Teammates NEVER capture each other. Landing on your partner&apos;s token creates an unbreakable <span className="font-bold text-emerald-400">Team Guard Block</span> that opponents cannot capture!
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">🚀 Partner Move Assistance:</span>
+                    When you get all 4 of your tokens home, your turn is NOT skipped! On subsequent rolls, you use your dice roll to move your partner&apos;s remaining tokens!
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">🏆 Joint Team Victory:</span>
+                    A team wins when ALL 8 tokens belonging to both partners reach the center triumph area!
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                    <span className="font-bold text-blue-300 block mb-0.5">🛤️ Live Path Trail Preview:</span>
+                    Tapping or hovering over your glowing token displays a numbered path showing the exact landing square!
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">🎲 Getting Out of Base:</span>
+                    Rolling a <span className="font-bold text-yellow-400">6</span> unlocks your token from base onto the Start cell and grants an extra roll.
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">🛑 Safe Cells:</span>
+                    Tokens on <span className="font-bold text-yellow-400">★ Stop cells</span> and your colored runway cannot be captured.
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
+                    <span className="font-bold text-white block mb-0.5">⚔️ Captures & Bonus Rolls:</span>
+                    Landing on an opponent sends their token back to base and grants a bonus roll!
+                  </div>
+                </>
+              )}
             </div>
 
             <button
               type="button"
               onClick={() => setRulesOpen(false)}
               className="mt-2 w-full h-11 rounded-xl font-bold text-xs text-white active:scale-98 transition-transform"
-              style={{ background: isOctagon ? '#0055D4' : COLORS.blue }}
+              style={{ background: isOctagon ? '#0055D4' : isDecagon ? '#7C3AED' : COLORS.blue }}
             >
               Ready to Play!
             </button>
           </div>
         </div>
       )}
+
+      {/* Sound Settings Modal */}
+      <SoundSettingsModal
+        open={soundSettingsOpen}
+        onClose={() => setSoundSettingsOpen(false)}
+      />
 
       {/* Confirm Quit Dialog */}
       <ConfirmDialog
@@ -572,6 +1028,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({
           setConfirmQuit(false);
           onQuit();
         }}
+      />
+
+      {/* Match Setup & Seat Configuration Modal */}
+      <MatchSetupModal
+        open={setupModalOpen}
+        onClose={() => setSetupModalOpen(false)}
+        onStartMatch={handleSetupComplete}
+        initialMode={matchMode}
       />
     </div>
   );

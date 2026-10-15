@@ -104,6 +104,32 @@ describe('Sound Engine & 23 Classic Sound Events', () => {
     assert.strictEqual(settings.hapticsEnabled, false);
   });
 
+  it('synchronizes both ak_audio_settings and ak_mind_trainer_audio_settings simultaneously', () => {
+    soundEngine.updateSettings({
+      masterVolume: 0.77,
+      sfxVolume: 0.82,
+      bgmVolume: 0.55,
+      ambientVolume: 0.44,
+      sfxMuted: false,
+      bgmMuted: true,
+      hapticsEnabled: true,
+    });
+
+    if (typeof localStorage !== 'undefined') {
+      const primaryRaw = localStorage.getItem('ak_audio_settings');
+      const legacyRaw = localStorage.getItem('ak_mind_trainer_audio_settings');
+      assert.ok(primaryRaw, 'Primary key ak_audio_settings must be written');
+      assert.ok(legacyRaw, 'Legacy key ak_mind_trainer_audio_settings must be written');
+
+      const primary = JSON.parse(primaryRaw!);
+      const legacy = JSON.parse(legacyRaw!);
+      assert.strictEqual(primary.masterVolume, 0.77);
+      assert.strictEqual(legacy.masterVolume, 0.77);
+      assert.strictEqual(primary.bgmMuted, true);
+      assert.strictEqual(legacy.bgmMuted, true);
+    }
+  });
+
   it('notifies subscribers whenever audio settings change', () => {
     let callCount = 0;
     let lastSettings: any = null;

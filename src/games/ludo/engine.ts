@@ -21,6 +21,12 @@ import {
   grantsExtraTurn,
   hasPlayerWon,
 } from './rules';
+import {
+  TeamMode,
+  getControllableTokensForTurn,
+  checkTeamVictory,
+  getPartnerIndex,
+} from './teamRules';
 
 export const TURN_DURATION_MS = 30_000; // 30 seconds per turn
 export const DICE_ROLL_MS = 700;       // dice animation duration (snappy & responsive)
@@ -96,7 +102,7 @@ export function resolveRoll(state: GameState, value: DiceValue): GameState {
  * Should the current turn auto-pass (no legal move, or forfeited)?
  * UI should call this after resolveRoll and auto-pass with a short delay.
  */
-export function shouldAutoPass(state: GameState): boolean {
+export function shouldAutoPass(state: GameState, teamMode: TeamMode = 'individual'): boolean {
   if (state.phase !== 'selecting') return false;
   if (state.diceValue === null) return false;
 
@@ -104,25 +110,34 @@ export function shouldAutoPass(state: GameState): boolean {
   if (state.consecutiveSixes === 3 && state.diceValue === 6) return true;
 
   // No legal moves with this dice value → pass
-  return getLegalMoves(state).length === 0;
+  return getLegalMoves(state, teamMode).length === 0;
 }
 
 /**
  * Apply a token move.
+ * Supports Team / Jodi mode where a completed player can move partner's tokens.
  *
- * @param tokenId  Must be the id of a token that has a legal move.
- * @returns        New state, or the SAME state if the move is illegal.
+ * @param tokenId   Must be the id of a controllable token that has a legal move.
+ * @param teamMode  'individual' or 'jodi_2v2'
+ * @returns         New state, or the SAME state if the move is illegal.
  */
-export function applyMove(state: GameState, tokenId: string): GameState {
+export function applyMove(
+  state: GameState,
+  tokenId: string,
+  teamMode: TeamMode = 'individual'
+): GameState {
   if (state.phase !== 'selecting') return state;
   const dice = state.diceValue;
   if (dice === null) return state;
 
   const token = state.tokens.find((t) => t.id === tokenId);
   if (!token) return state;
-  if (token.playerIndex !== state.activePlayerIndex) return state;
 
-  const move = computeMove(state, token, dice);
+  // In individual mode: only own tokens. In team mode: own tokens or partner's if finished.
+  const controllable = getControllableTokensForTurn(state, teamMode);
+  if (!controllable.some((t) => t.id === tokenId)) return state;
+
+  const move = computeMove(state, token, dice, teamMode);
   if (!move) return state;
 
   // -------- Apply to tokens (immutable) --------
@@ -132,12 +147,32 @@ export function applyMove(state: GameState, tokenId: string): GameState {
     return t;
   });
 
-  // -------- Did the player win? --------
   const tempState: GameState = { ...state, tokens: newTokens };
-  const playerWon = hasPlayerWon(tempState, state.activePlayerIndex);
+
+  // -------- Check Victory Condition --------
+  let matchEnded = false;
+  let winner = state.winner;
+  const finishOrder = [...state.finishOrder];
+
+  if (teamMode !== 'individual') {
+    const { won: teamWon, winningTeam } = checkTeamVictory(tempState, teamMode);
+    if (teamWon) {
+      matchEnded = true;
+      winner = winningTeam?.teamId ?? state.activePlayerIndex;
+    }
+  } else {
+    const playerWon = hasPlayerWon(tempState, state.activePlayerIndex);
+    if (playerWon) {
+      if (!finishOrder.includes(state.activePlayerIndex)) {
+        finishOrder.push(state.activePlayerIndex);
+      }
+      winner = winner ?? finishOrder[0] ?? state.activePlayerIndex;
+      matchEnded = true;
+    }
+  }
 
   // -------- Extra turn? --------
-  const extra = !playerWon && grantsExtraTurn(move, dice);
+  const extra = !matchEnded && grantsExtraTurn(move, dice);
 
   // -------- Build turn record --------
   const record: TurnRecord = {
@@ -159,14 +194,8 @@ export function applyMove(state: GameState, tokenId: string): GameState {
   let nextPlayer = state.activePlayerIndex;
   let nextSixes = state.consecutiveSixes;
   let nextPhase: GamePhase = 'waiting';
-  const finishOrder = [...state.finishOrder];
-  let winner = state.winner;
 
-  if (playerWon) {
-    if (!finishOrder.includes(state.activePlayerIndex)) {
-      finishOrder.push(state.activePlayerIndex);
-    }
-    winner = winner ?? finishOrder[0] ?? state.activePlayerIndex;
+  if (matchEnded) {
     nextPhase = 'ended';
     nextSixes = 0;
   } else if (extra) {
@@ -176,7 +205,9 @@ export function applyMove(state: GameState, tokenId: string): GameState {
     nextPlayer = findNextActivePlayer(
       state.players,
       state.activePlayerIndex,
-      finishOrder
+      finishOrder,
+      teamMode,
+      tempState
     );
     nextSixes = 0;
   }
@@ -199,7 +230,7 @@ export function applyMove(state: GameState, tokenId: string): GameState {
  * Explicitly pass the turn to the next player.
  * Called by UI after auto-pass delay, or by timer.
  */
-export function passTurn(state: GameState): GameState {
+export function passTurn(state: GameState, teamMode: TeamMode = 'individual'): GameState {
   if (state.winner !== null) {
     return { ...state, phase: 'ended' };
   }
@@ -208,7 +239,9 @@ export function passTurn(state: GameState): GameState {
   const nextPlayer = findNextActivePlayer(
     state.players,
     state.activePlayerIndex,
-    state.finishOrder
+    state.finishOrder,
+    teamMode,
+    state
   );
 
   return {
@@ -224,13 +257,32 @@ export function passTurn(state: GameState): GameState {
 /**
  * Timer tick — auto-pass if the current turn has exceeded the time limit.
  * Safe to call every second.
+ * Supports both signatures:
+ *   tickTimer(state, now)
+ *   tickTimer(state, teamMode, now)
  */
-export function tickTimer(state: GameState, now = Date.now()): GameState {
+export function tickTimer(
+  state: GameState,
+  teamModeOrNow?: TeamMode | number,
+  maybeNow?: number
+): GameState {
+  let teamMode: TeamMode = 'individual';
+  let now = Date.now();
+
+  if (typeof teamModeOrNow === 'number') {
+    now = teamModeOrNow;
+  } else if (typeof teamModeOrNow === 'string') {
+    teamMode = teamModeOrNow;
+    if (typeof maybeNow === 'number') {
+      now = maybeNow;
+    }
+  }
+
   if (state.winner !== null) return state;
   if (state.phase !== 'waiting' && state.phase !== 'selecting') return state;
 
   if (now - state.turnStartedAt > TURN_DURATION_MS) {
-    return passTurn(state);
+    return passTurn(state, teamMode);
   }
   return state;
 }
@@ -253,17 +305,33 @@ export function resetTurnForCurrentPlayer(state: GameState): GameState {
 function findNextActivePlayer(
   players: Player[],
   current: number,
-  finished: number[]
+  finished: number[],
+  teamMode: TeamMode = 'individual',
+  state?: GameState
 ): number {
   const n = players.length;
   if (n === 0) return current;
 
   let next = (current + 1) % n;
   let guard = 0;
-  while (finished.includes(next) && guard < n) {
+
+  while (guard < n) {
+    if (teamMode === 'individual') {
+      if (!finished.includes(next)) return next;
+    } else if (state) {
+      // In team mode, a player is only skipped if both they AND their partner are finished
+      const controllable = getControllableTokensForTurn(
+        { ...state, activePlayerIndex: next },
+        teamMode
+      );
+      if (controllable.length > 0) return next;
+    } else {
+      if (!finished.includes(next)) return next;
+    }
     next = (next + 1) % n;
     guard++;
   }
+
   return next;
 }
 
@@ -281,8 +349,11 @@ export function secondsLeft(state: GameState, now = Date.now()): number {
 /**
  * All legal moves for the current player with the current dice value.
  */
-export function currentLegalMoves(state: GameState): MoveOption[] {
-  return getLegalMoves(state);
+export function currentLegalMoves(
+  state: GameState,
+  teamMode: TeamMode = 'individual'
+): MoveOption[] {
+  return getLegalMoves(state, teamMode);
 }
 
 /**

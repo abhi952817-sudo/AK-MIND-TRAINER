@@ -21,6 +21,7 @@ import {
 import { DiceValue, GameState, MoveOption, Player } from './types';
 import { getBotMove } from './bot';
 import { soundEngine } from '../../utils/audio';
+import { TeamMode, getPartnerIndex, hasPlayerFinishedAllTokens } from './teamRules';
 
 export interface UseLudoOptions {
   /** If true, players with isBot=true auto-roll + auto-move. */
@@ -29,6 +30,8 @@ export interface UseLudoOptions {
   autoPassDelay?: number;
   /** Milliseconds for dice roll animation. Default 1400. */
   rollDuration?: number;
+  /** Team / Jodi Mode ('individual' | 'jodi_2v2' | etc.) */
+  teamMode?: TeamMode;
 }
 
 export interface UseLudoApi {
@@ -69,6 +72,7 @@ export function useLudo(
     autoPlayBots = true,
     autoPassDelay = 350,
     rollDuration = DICE_ROLL_MS,
+    teamMode = 'individual',
   } = options;
 
   const [state, setState] = useState<GameState>(() =>
@@ -99,10 +103,10 @@ export function useLudo(
   useEffect(() => {
     if (state.phase === 'ended') return;
     const iv = setInterval(() => {
-      setState((prev) => tickTimer(prev));
+      setState((prev) => tickTimer(prev, teamMode));
     }, 1000);
     return () => clearInterval(iv);
-  }, [state.phase]);
+  }, [state.phase, teamMode]);
 
   // ----- Core roll action -----
   const performRoll = useCallback(
@@ -131,15 +135,15 @@ export function useLudo(
       setState(next);
 
       // Auto-pass if needed
-      if (shouldAutoPass(next)) {
+      if (shouldAutoPass(next, teamMode)) {
         await sleep(autoPassDelay);
-        next = passTurn(next);
+        next = passTurn(next, teamMode);
         setState(next);
       }
 
       rollingLock.current = false;
     },
-    [rollDuration, autoPassDelay]
+    [rollDuration, autoPassDelay, teamMode]
   );
 
   // ----- Bot auto-play -----
@@ -165,7 +169,7 @@ export function useLudo(
 
       const s = stateRef.current;
       if (s.phase === 'selecting' && s.activePlayerIndex === currentPlayer.index) {
-        const botMove = getBotMove(s);
+        const botMove = getBotMove(s, teamMode);
         if (botMove) {
           // Play specific audio cues based on the move's tactical outcome
           if (botMove.captures && botMove.captures.length > 0) {
@@ -177,11 +181,11 @@ export function useLudo(
           } else if (botMove.entersHomeColumn) {
             soundEngine.playHomeEntry();
           }
-          setState((prev) => applyMove(prev, botMove.tokenId));
+          setState((prev) => applyMove(prev, botMove.tokenId, teamMode));
         } else {
           // No legal move — engine should have auto-passed already,
           // but be defensive.
-          setState((prev) => passTurn(prev));
+          setState((prev) => passTurn(prev, teamMode));
         }
       }
 
@@ -191,7 +195,7 @@ export function useLudo(
     return () => {
       botLock.current = false;
     };
-  }, [state.phase, state.activePlayerIndex, state.players, autoPlayBots, performRoll]);
+  }, [state.phase, state.activePlayerIndex, state.players, autoPlayBots, performRoll, teamMode]);
 
   // ----- Public API -----
   const roll = useCallback(() => {
@@ -202,17 +206,34 @@ export function useLudo(
     performRoll(false);
   }, [performRoll, autoPlayBots]);
 
-  const selectToken = useCallback((tokenId: string) => {
-    const s = stateRef.current;
-    if (s.phase !== 'selecting') return;
-    const currentPlayer = s.players[s.activePlayerIndex];
-    if (currentPlayer?.isBot && autoPlayBots) return;
-    if (currentPlayer?.index !== humanIndex && humanPlayerId) {
-      // Not your token — ignore
-      return;
-    }
-    setState((prev) => applyMove(prev, tokenId));
-  }, [autoPlayBots, humanIndex, humanPlayerId]);
+  const selectToken = useCallback(
+    (tokenId: string) => {
+      const s = stateRef.current;
+      if (s.phase !== 'selecting') return;
+      const currentPlayer = s.players[s.activePlayerIndex];
+      if (currentPlayer?.isBot && autoPlayBots) return;
+
+      if (currentPlayer?.index !== humanIndex && humanPlayerId) {
+        // Not your turn
+        return;
+      }
+
+      // Check if this token belongs to the player, or to their partner if self finished
+      const partnerIdx = getPartnerIndex(humanIndex, teamMode, s.players.length);
+      const isSelfToken = tokenId.startsWith(`${humanIndex}-`);
+      const isPartnerToken =
+        partnerIdx !== null &&
+        tokenId.startsWith(`${partnerIdx}-`) &&
+        hasPlayerFinishedAllTokens(s, humanIndex);
+
+      if (!isSelfToken && !isPartnerToken && humanPlayerId) {
+        return;
+      }
+
+      setState((prev) => applyMove(prev, tokenId, teamMode));
+    },
+    [autoPlayBots, humanIndex, humanPlayerId, teamMode]
+  );
 
   const restart = useCallback(() => {
     setState(createInitialState(stateRef.current.players));
@@ -222,7 +243,10 @@ export function useLudo(
     setState(createInitialState(newPlayers));
   }, []);
 
-  const legalMoves = useMemo(() => currentLegalMoves(state), [state]);
+  const legalMoves = useMemo(
+    () => currentLegalMoves(state, teamMode),
+    [state, teamMode]
+  );
 
   const timeLeft = useMemo(() => secondsLeft(state), [state]);
 

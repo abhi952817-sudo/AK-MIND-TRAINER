@@ -40,53 +40,20 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
     }
   }, [value, activeRolling]);
 
-  // Web Audio sound synthesizer for physical dice
+  // Centralized Sound Integration via soundEngine (respects Mute, SFX Vol, Master Vol)
   const playSound = (stage: 'start' | 'loop' | 'land') => {
     try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-
       if (stage === 'start') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(340, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.12);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.13);
+        soundEngine.playDiceTap();
       } else if (stage === 'loop') {
-        for (let i = 0; i < 4; i++) {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'square';
-          const t = ctx.currentTime + i * 0.07;
-          osc.frequency.setValueAtTime(200 + i * 35, t);
-          gain.gain.setValueAtTime(0.08, t);
-          gain.gain.linearRampToValueAtTime(0.01, t + 0.05);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start(t);
-          osc.stop(t + 0.06);
-        }
+        soundEngine.playDiceRoll();
       } else if (stage === 'land') {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(160, ctx.currentTime + 0.16);
-        gain.gain.setValueAtTime(0.35, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.22);
+        soundEngine.playDiceLand();
+        if (value === 6) {
+          setTimeout(() => {
+            soundEngine.playSixSound();
+          }, 120);
+        }
       }
     } catch {
       // Safe fallback
@@ -97,7 +64,7 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
   useEffect(() => {
     if (activeRolling) {
       playSound('start');
-      const loopTimer = setTimeout(() => playSound('loop'), 250);
+      const loopTimer = setTimeout(() => playSound('loop'), 180);
 
       // Increment rotation turns so every roll spins multiple times forward
       rollTurns.current.x += 720;
