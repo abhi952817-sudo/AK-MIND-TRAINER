@@ -312,27 +312,31 @@ function findNextActivePlayer(
   const n = players.length;
   if (n === 0) return current;
 
-  let next = (current + 1) % n;
+  const currentIdxInArray = players.findIndex((p) => p.index === current);
+  let step = 1;
   let guard = 0;
 
   while (guard < n) {
+    const nextArrayIdx = ((currentIdxInArray >= 0 ? currentIdxInArray : 0) + step) % n;
+    const candidate = players[nextArrayIdx].index;
+
     if (teamMode === 'individual') {
-      if (!finished.includes(next)) return next;
+      if (!finished.includes(candidate)) return candidate;
     } else if (state) {
       // In team mode, a player is only skipped if both they AND their partner are finished
       const controllable = getControllableTokensForTurn(
-        { ...state, activePlayerIndex: next },
+        { ...state, activePlayerIndex: candidate },
         teamMode
       );
-      if (controllable.length > 0) return next;
+      if (controllable.length > 0) return candidate;
     } else {
-      if (!finished.includes(next)) return next;
+      if (!finished.includes(candidate)) return candidate;
     }
-    next = (next + 1) % n;
+    step++;
     guard++;
   }
 
-  return next;
+  return current;
 }
 
 // -------------------- Derived selectors --------------------

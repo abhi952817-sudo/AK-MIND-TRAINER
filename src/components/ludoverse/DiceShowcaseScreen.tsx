@@ -60,6 +60,7 @@ export const DiceShowcaseScreen: React.FC<DiceShowcaseScreenProps> = ({
             onRoll={handleRoll}
             accentColor="#E63946"
             theme="dark"
+            enableInternalSound={true}
           />
 
           <div className="mt-8 flex items-center gap-2 text-xs text-[#8D99AE]">

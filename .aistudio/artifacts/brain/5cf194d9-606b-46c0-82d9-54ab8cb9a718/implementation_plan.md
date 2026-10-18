@@ -1,37 +1,64 @@
-# Implementation Plan: Full Board Parity, Ergonomics & Multi-Player Refinement (4P to 10P)
+# Implementation Plan: Critical Engine Fixes, Blockade Correction & 10-Point Classic Ludo Verification
 
-This plan outlines the next phase of development for the **AK MIND TRAINER — Ludoverse** engine, ensuring seamless gameplay, visual parity across all player counts (4P Square, 5P Pentagon, 6P Hexagon, 8P Octagon, 9P Enneagon, 10P Decagon), and mobile touch ergonomics.
-
----
-
-## 1. Universal Player HUD & Token Progress Parity
-- **Consistent Player Status Bars**: Extend the player HUD status bar currently on 5P to all boards (4P, 6P, 8P, 9P, 10P), showing:
-  - Player avatar/initials with assigned hex color & engraved symbol.
-  - Active turn indicator with smooth pulse animation.
-  - Live token home completion counter (e.g., `(2/4)`).
-  - Bot badge vs. human player badge.
+Based on the thorough codebase audit against the **Ludo Master Specification** and GitHub repository findings, this plan prioritizes fixing real code discrepancies, eliminating audio duplication, correcting blockade rules, and executing a rigorous 10-point verification checklist—without unnecessary rewrites or breaking working visual designs.
 
 ---
 
-## 2. Dynamic Viewport Scaling & Auto-Zoom for High-Density Boards (8P, 9P, 10P)
-- **Viewport Ergonomics**: On mobile screens, 8P, 9P, and 10P boards have many track cells and tokens in close proximity.
-  - Add smooth touch zoom/pan toggle (`1x` / `1.5x` / `2x`) for dense boards.
-  - Add active sector auto-focus so the viewport subtly shifts attention toward the player currently rolling or moving.
+## 1. Fix Duel (2-Player) Turn Advancement Bug (Critical)
+- **Problem**: In `GameScreen.tsx`, `TWO_PLAYERS` contains Player 0 (Blue) and Player 2 (Green, Marcus). In `engine.ts`, `findNextActivePlayer()` computes `(current + 1) % players.length`. For a 2-player game, `(0 + 1) % 2 = 1`. Index 1 does not exist in `TWO_PLAYERS`, leaving Marcus's tokens (`playerIndex: 2`) unselectable and stalling the turn loop.
+- **Solution**: Refactor `findNextActivePlayer()` to locate the current player in the `players` roster by index and cycle to the next valid participant:
+  ```ts
+  const currentPos = players.findIndex(p => p.index === current);
+  const nextPos = (currentPos >= 0 ? currentPos + 1 : 0) % players.length;
+  let next = players[nextPos].index;
+  ```
+  This guarantees turn alternation (`0 → 2 → 0 → 2`) regardless of whether player indices are contiguous.
 
 ---
 
-## 3. Visual & Audio Polish
-- **Path Highlighting**: When hovering or tapping an eligible token, display the exact forward path tiles illuminated in the player's primary color with step numbers.
-- **Sound & Haptics Sync**: Ensure all 23 classic audio events (dice roll, bonus six, safe star entry, capture, victory fanfare) trigger reliably across all polygonal game variants.
+## 2. Eliminate Double Dice Sound Triggers (High Priority)
+- **Problem**: Both `useLudo.ts` (and polygonal hooks) and `Dice3DCube.tsx` call `soundEngine.playDiceRattle()`, `soundEngine.playDiceLand()`, and `soundEngine.playDiceSixBonus()` / `soundEngine.playSixSound()`, triggering duplicate overlapping sound effects on every roll.
+- **Solution**: Centralize dice audio management strictly within the game hooks (`useLudo.ts`, `usePolygonalLudo.ts`). Make `Dice3DCube.tsx` purely responsible for 3D physics rendering and visual animations, removing redundant internal audio invocations.
 
 ---
 
-## 4. Multi-Player Lobby & Setup Path Finalization
-- Enable quick-switching and custom seat configuration directly from the match setup modal for all 6 board geometries.
-- Preserve AI bot difficulty settings ('easy', 'normal', 'hard') into polygonal state loops.
+## 3. Correct Same-Player Blockade Logic in `rules.ts` (Medium Priority)
+- **Problem**: `getEnemyBlockadeTrackIndices()` in `src/games/ludo/rules.ts` tallies all opponent tokens on a tile together into a single counter. If Player 1 (Red) and Player 2 (Green) each have 1 token on safe cell 8, it incorrectly registers an opponent blockade.
+- **Solution**: A blockade strictly requires 2 or more tokens belonging to the **same** opponent player (or same allied team in team mode). Update `getEnemyBlockadeTrackIndices()`:
+  ```ts
+  // Key by: `${trackIdx}-${token.playerIndex}` (or `${trackIdx}-${teamId}` in team mode)
+  // Only add trackIdx to blockades if a single opponent entity has count >= 2
+  ```
+- **Regression Tests**: Add automated tests verifying that tokens of two different opponents sharing a safe star cell do NOT form a blockade.
 
 ---
 
-## 5. Verification & Testing
-- Validate all board layouts in responsive mobile and desktop viewports.
-- Run `compile_applet` and test suite to ensure 0 TypeScript or runtime regressions.
+## 4. Synchronize `board.ts` Color Comments (Documentation & Maintenance)
+- **Problem**: `board.ts` comments describe Player 0 as Red, 1 as Green, 2 as Yellow, 3 as Blue, whereas `LudoBoard.tsx` and the actual grid coordinates render Player 0 as Blue (`[6, 1]`), 1 as Red (`[1, 8]`), 2 as Green (`[8, 13]`), and 3 as Yellow (`[13, 6]`). The coordinate math is correct, but outdated comments invite future misconfigurations.
+- **Solution**: Update the comments and annotations in `src/games/ludo/board.ts` to strictly reflect `0=Blue, 1=Red, 2=Green, 3=Yellow` without touching the verified coordinate arrays.
+
+---
+
+## 5. Engine Consolidation & Test Coverage Clarity
+- **Status**: The active application UI exclusively uses `src/games/ludo/engine.ts` and `useLudo.ts`. The legacy file `src/utils/ludoEngine.ts` is only referenced by older test files.
+- **Action**: Ensure all new unit and regression tests target `src/games/ludo/engine.ts` and `src/games/ludo/rules.ts`. Mark `src/utils/ludoEngine.ts` as legacy to avoid confusion.
+
+---
+
+## 6. Execution of the 10-Point Classic Ludo Verification Checklist
+Run comprehensive automated tests and manual verification against all 10 core criteria:
+1. **Dice 6 Base Exit**: Only rolling a 6 unlocks tokens from home base.
+2. **Four Color Paths**: Blue, Red, Green, and Yellow complete their exact 52-cell track and 6-cell home runways.
+3. **Safe Cells & Captures**: Stars prevent captures; standard landing captures enemy and returns them to base.
+4. **Home Runway & Exact Finish**: Tokens enter the center triumph only on exact roll numbers without overshooting.
+5. **Bonus Roll & 3 Consecutive Sixes**: Rolling a 6 grants a bonus roll; rolling 3 consecutive sixes forfeits the turn.
+6. **Blockade & Pass Restriction**: Legitimate same-player blockades block enemy passage; multi-opponent safe cells do not block.
+7. **Turn Timers & Auto-Pass**: Timer expiration and zero legal moves smoothly advance the turn.
+8. **Victory & Match Reset**: 4 tokens home triggers victory fanfare and clean rematch state.
+9. **Offline Bot AI**: Bots make strategic moves on their turns without interfering with human selections.
+10. **Touch & Viewport Scaling**: 2D wooden board with 3D dice cube scales cleanly on mobile viewports.
+
+---
+
+## 7. Build & Compilation Verification
+- Run `npm test` and `compile_applet` to verify 100% build pass with 0 errors.

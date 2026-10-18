@@ -18,6 +18,7 @@ import {
   TeamMode,
   isTeammate,
   getControllableTokensForTurn,
+  getPartnerIndex,
 } from './teamRules';
 
 /**
@@ -30,7 +31,8 @@ export function getEnemyBlockadeTrackIndices(
   teamMode: TeamMode = 'individual'
 ): Set<number> {
   const blockades = new Set<number>();
-  const opponentTrackCounts = new Map<number, number>();
+  // Group counts strictly by [trackIdx, opponentEntityId] so different opponents don't combine into a false blockade
+  const opponentEntityCounts = new Map<string, number>();
 
   for (const token of state.tokens) {
     // Teammate or self tokens do not create enemy blockades
@@ -42,8 +44,12 @@ export function getEnemyBlockadeTrackIndices(
     const trackIdx = toTrackIndex(token.playerIndex, token.position);
     if (trackIdx === null) continue;
 
-    const currentCount = (opponentTrackCounts.get(trackIdx) ?? 0) + 1;
-    opponentTrackCounts.set(trackIdx, currentCount);
+    const partner = teamMode !== 'individual' ? getPartnerIndex(token.playerIndex, teamMode) : null;
+    const entityId = partner !== null ? Math.min(token.playerIndex, partner) : token.playerIndex;
+    const key = `${trackIdx}-${entityId}`;
+
+    const currentCount = (opponentEntityCounts.get(key) ?? 0) + 1;
+    opponentEntityCounts.set(key, currentCount);
     if (currentCount >= 2) {
       blockades.add(trackIdx);
     }
@@ -53,7 +59,7 @@ export function getEnemyBlockadeTrackIndices(
 }
 
 /**
- * Checks whether a specific global track index has a blockade formed by any player,
+ * Checks whether a specific global track index has a blockade formed by any single player,
  * or by a specific player if playerIndex is provided.
  */
 export function isBlockadeAtTrackIndex(
@@ -61,14 +67,29 @@ export function isBlockadeAtTrackIndex(
   trackIndex: number,
   playerIndex?: number
 ): boolean {
-  let count = 0;
+  if (playerIndex !== undefined) {
+    let count = 0;
+    for (const t of tokens) {
+      if (t.position < 0 || t.position > 50) continue;
+      if (t.playerIndex !== playerIndex) continue;
+      const tIdx = toTrackIndex(t.playerIndex, t.position);
+      if (tIdx === trackIndex) {
+        count++;
+        if (count >= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  // Any single player with 2+ tokens at this track index
+  const playerCounts = new Map<number, number>();
   for (const t of tokens) {
     if (t.position < 0 || t.position > 50) continue;
-    if (playerIndex !== undefined && t.playerIndex !== playerIndex) continue;
     const tIdx = toTrackIndex(t.playerIndex, t.position);
     if (tIdx === trackIndex) {
-      count++;
-      if (count >= 2) return true;
+      const c = (playerCounts.get(t.playerIndex) ?? 0) + 1;
+      playerCounts.set(t.playerIndex, c);
+      if (c >= 2) return true;
     }
   }
   return false;

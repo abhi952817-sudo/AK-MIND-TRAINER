@@ -12,6 +12,7 @@ interface Dice3DCubeProps {
   accentColor?: string;
   theme?: 'dark' | 'light';
   showPopupResult?: boolean;
+  enableInternalSound?: boolean;
 }
 
 export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
@@ -23,6 +24,7 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
   accentColor = '#E63946',
   theme = 'dark',
   showPopupResult = true,
+  enableInternalSound = false,
 }) => {
   const activeRolling = rolling !== undefined ? rolling : Boolean(isRolling);
   const [isPressed, setIsPressed] = useState(false);
@@ -40,8 +42,9 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
     }
   }, [value, activeRolling]);
 
-  // Centralized Sound Integration via soundEngine (respects Mute, SFX Vol, Master Vol)
+  // Sound Integration via soundEngine — only enabled for standalone showcase to prevent double audio in game engines
   const playSound = (stage: 'start' | 'loop' | 'land') => {
+    if (!enableInternalSound) return;
     try {
       if (stage === 'start') {
         soundEngine.playDiceTap();
@@ -63,17 +66,20 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
   // When rolling begins / ends
   useEffect(() => {
     if (activeRolling) {
-      playSound('start');
-      const loopTimer = setTimeout(() => playSound('loop'), 180);
+      if (enableInternalSound) {
+        playSound('start');
+        const loopTimer = setTimeout(() => playSound('loop'), 180);
+        return () => clearTimeout(loopTimer);
+      }
 
       // Increment rotation turns so every roll spins multiple times forward
       rollTurns.current.x += 720;
       rollTurns.current.y += 1080;
-
-      return () => clearTimeout(loopTimer);
     } else if (value >= 1 && value <= 6) {
       setDisplayValue(value);
-      playSound('land');
+      if (enableInternalSound) {
+        playSound('land');
+      }
       setBouncing(true);
 
       if (showPopupResult) {
@@ -86,11 +92,10 @@ export const Dice3DCube: React.FC<Dice3DCubeProps> = ({
         };
       }
     }
-  }, [activeRolling, value, showPopupResult]);
+  }, [activeRolling, value, showPopupResult, enableInternalSound]);
 
   const handleTap = () => {
     if (disabled || activeRolling) return;
-    soundEngine.playDiceTap();
     haptics.diceRoll();
     setIsPressed(true);
     setTimeout(() => {

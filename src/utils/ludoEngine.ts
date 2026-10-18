@@ -1,3 +1,11 @@
+/**
+ * ARCHITECTURAL NOTICE - LEGACY UTILITY
+ * -------------------------------------
+ * Active production Ludo gameplay uses `src/games/ludo/engine.ts`, `rules.ts`, and `board.ts`.
+ * This file is maintained as a legacy utility for existing baseline regression tests.
+ * Do not route active GameScreen logic here.
+ */
+
 import {
   PlayerColor,
   Token,

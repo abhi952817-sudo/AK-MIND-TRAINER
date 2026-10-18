@@ -4,21 +4,21 @@
 export const BOARD_SIZE = 15;
 
 /**
- * The 52-cell main track, clockwise starting from Red's start cell.
+ * The 52-cell main track, clockwise starting from Player 0 (Blue)'s start cell [6, 1].
  * Coordinates are [row, col] on the 15x15 grid.
  *
  * Verified layout (52 cells):
- *  - 0..4    : row 6, cols 1..5    (Red start at index 0)
+ *  - 0..4    : row 6, cols 1..5    (Player 0 Blue start at index 0 [6, 1])
  *  - 5..10   : col 6, rows 5..0    (upward)
  *  - 11      : (0,7)               (top middle)
- *  - 12..17  : col 8, rows 0..5    (downward)
- *  - 18..23  : row 6, cols 9..14   (Green start at index 13)
+ *  - 12..17  : col 8, rows 0..5    (Player 1 Red start at index 13 [1, 8])
+ *  - 18..23  : row 6, cols 9..14   (rightward)
  *  - 24      : (7,14)              (right middle)
- *  - 25..30  : row 8, cols 14..9   (leftward)
- *  - 31..36  : col 8, rows 9..14   (Yellow start at index 26)
+ *  - 25..30  : row 8, cols 14..9   (Player 2 Green start at index 26 [8, 13])
+ *  - 31..36  : col 8, rows 9..14   (downward)
  *  - 37      : (14,7)              (bottom middle)
- *  - 38..43  : col 6, rows 14..9   (upward)
- *  - 44..49  : row 8, cols 5..0    (Blue start at index 39)
+ *  - 38..43  : col 6, rows 14..9   (Player 3 Yellow start at index 39 [13, 6])
+ *  - 44..49  : row 8, cols 5..0    (leftward)
  *  - 50      : (7,0)               (left middle)
  *  - 51      : (6,0)               (returns near start)
  */
@@ -59,21 +59,26 @@ export const TOTAL_STEPS = WIN_POSITION; // alias for rules and engine
 
 /**
  * Start cell on the main track for each player.
- * index:  0=Red, 1=Green, 2=Yellow, 3=Blue
+ * Canonical color order:
+ *  - Player 0: Blue   (start: [6, 1],  track index 0)
+ *  - Player 1: Red    (start: [1, 8],  track index 13)
+ *  - Player 2: Green  (start: [8, 13], track index 26)
+ *  - Player 3: Yellow (start: [13, 6], track index 39)
  */
 export const PLAYER_STARTS: readonly number[] = [0, 13, 26, 39];
 
 /**
- * Home column cells for each player (6 cells from track entry to center).
+ * Home column cells for each player (6 cells from track entry to center [7,7]).
+ * Matches LudoBoard.tsx visual runways and center convergence.
  */
 export const HOME_COLUMNS: readonly [number, number][][] = [
-  // Red:    row 7, cols 1..6 (moving right toward center)
+  // Player 0 (Blue):   row 7, cols 1..6 (moving right toward center)
   [[7, 1], [7, 2], [7, 3], [7, 4], [7, 5], [7, 6]],
-  // Green:  col 7, rows 1..6 (moving down toward center)
+  // Player 1 (Red):    col 7, rows 1..6 (moving down toward center)
   [[1, 7], [2, 7], [3, 7], [4, 7], [5, 7], [6, 7]],
-  // Yellow: row 7, cols 13..8 (moving left toward center)
+  // Player 2 (Green):  row 7, cols 13..8 (moving left toward center)
   [[7, 13], [7, 12], [7, 11], [7, 10], [7, 9], [7, 8]],
-  // Blue:   col 7, rows 13..8 (moving up toward center)
+  // Player 3 (Yellow): col 7, rows 13..8 (moving up toward center)
   [[13, 7], [12, 7], [11, 7], [10, 7], [9, 7], [8, 7]],
 ] as const;
 

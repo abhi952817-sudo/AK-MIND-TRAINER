@@ -732,3 +732,90 @@ describe('Active 8-Player Octagonal Engine Tests (src/games/ludo/octagonalEngine
     assert.strictEqual(baseBlockades.size, 0, 'Base tokens must not form octagonal track blockades');
   });
 });
+
+describe('Phase 1 & 2: 2-Player Duel & Same-Player Blockade Regressions', () => {
+  it('Duel Mode (Players 0 and 2) correctly alternates turns 0 -> 2 -> 0 -> 2', () => {
+    const duelPlayers: Player[] = [
+      { uid: 'you', name: 'You', color: 'blue', index: 0, isBot: false, isHost: true, isReady: true, isOnline: true },
+      { uid: 'bot2', name: 'Marcus', color: 'green', index: 2, isBot: true, isHost: false, isReady: true, isOnline: true },
+    ];
+
+    let state = createInitialState(duelPlayers);
+    assert.strictEqual(state.activePlayerIndex, 0, 'Match starts with Player 0');
+
+    // Passing turn from Player 0 should advance to Player 2 (NOT Player 1)
+    state = passTurn(state);
+    assert.strictEqual(state.activePlayerIndex, 2, 'Turn must advance to Player 2 (Marcus)');
+
+    // Passing turn from Player 2 should advance back to Player 0
+    state = passTurn(state);
+    assert.strictEqual(state.activePlayerIndex, 0, 'Turn must advance back to Player 0');
+
+    // Verify when Player 2 rolls a 6, their tokens (playerIndex: 2) are movable
+    state = { ...state, activePlayerIndex: 2, phase: 'selecting', diceValue: 6 };
+    const moves = getLegalMoves(state);
+    assert.strictEqual(moves.length, 4, 'Marcus must have 4 movable tokens on roll 6');
+    assert.strictEqual(moves[0].tokenId, '2-0', 'Token must belong to Player 2');
+  });
+
+  it('Blockade strictly requires 2 tokens of the SAME opponent (Different opponents do NOT block)', () => {
+    const players = create4TestPlayers();
+    let state = createInitialState(players);
+
+    // Case A: Player 1 (Red) and Player 2 (Green) each have 1 token on track cell 8 (Safe Star).
+    // Player 1 at position 0 (Red start is track index 13? Let's check: Player 0 start 0, so pos 8 is track idx 8).
+    // For Player 1 (start 13): position 47 wraps to (13 + 47) % 52 = 60 % 52 = 8!
+    // For Player 2 (start 26): position 34 wraps to (26 + 34) % 52 = 60 % 52 = 8!
+    state = {
+      ...state,
+      tokens: [
+        { id: '1-0', playerIndex: 1, tokenIndex: 0, position: 47, color: 'red' },
+        { id: '2-0', playerIndex: 2, tokenIndex: 0, position: 34, color: 'green' },
+        ...state.tokens.filter((t) => t.id !== '1-0' && t.id !== '2-0'),
+      ],
+    };
+
+    // For Player 0, track index 8 has 2 opponent tokens, but from TWO DIFFERENT PLAYERS!
+    const enemyBlockadesA = getEnemyBlockadeTrackIndices(state, 0);
+    assert.strictEqual(
+      enemyBlockadesA.has(8),
+      false,
+      'Two different opponents on track index 8 must NOT form an enemy blockade'
+    );
+
+    // Player 0 token at position 5 (track index 5) rolling a 5 lands on position 10 (track index 10).
+    // Moving 5 -> 10 passes through track index 8. It must be legal!
+    const p0Token = state.tokens.find((t) => t.playerIndex === 0 && t.tokenIndex === 0)!;
+    const p0TokenAt5 = { ...p0Token, position: 5 };
+    assert.strictEqual(
+      canTokenMove(p0TokenAt5, 5, state),
+      true,
+      'Player 0 can legally pass through cell 8 when occupied by different opponents'
+    );
+
+    // Case B: Player 1 (Red) has 2 tokens on track cell 8 -> SAME opponent blockade!
+    state = {
+      ...state,
+      tokens: [
+        { id: '1-0', playerIndex: 1, tokenIndex: 0, position: 47, color: 'red' },
+        { id: '1-1', playerIndex: 1, tokenIndex: 1, position: 47, color: 'red' },
+        ...state.tokens.filter((t) => t.id !== '1-0' && t.id !== '1-1'),
+      ],
+    };
+
+    const enemyBlockadesB = getEnemyBlockadeTrackIndices(state, 0);
+    assert.strictEqual(
+      enemyBlockadesB.has(8),
+      true,
+      'Two tokens of the SAME opponent on track index 8 MUST form an enemy blockade'
+    );
+
+    // Now Player 0 moving 5 -> 10 passing through 8 must be rejected!
+    assert.strictEqual(
+      canTokenMove(p0TokenAt5, 5, state),
+      false,
+      'Player 0 CANNOT pass through a true enemy blockade formed by the same opponent'
+    );
+  });
+});
+
