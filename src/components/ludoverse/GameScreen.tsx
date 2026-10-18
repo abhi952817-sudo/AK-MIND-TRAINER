@@ -32,10 +32,15 @@ import { useDecagonalLudo } from '../../games/ludo/useDecagonalLudo';
 import { DECAGON_SECTORS } from '../../games/ludo/decagonalBoard';
 import { DecagonPlayer } from '../../games/ludo/decagonalEngine';
 
+// Polygonal Board (5P Pentagon, 9P Enneagon, etc.) imports
+import { PolygonalLudoBoard } from './PolygonalLudoBoard';
+import { usePolygonalLudo } from '../../games/ludo/usePolygonalLudo';
+import { getBoardConfig, BoardPlayerCount } from '../../games/ludo/polygonalBoardGeometry';
+
 // Match Setup Lobby Modal
 import { MatchSetupModal, MatchSetupResult, SeatConfig } from './MatchSetupModal';
 
-export type MatchMode = 'classic' | 'jodi' | 'hexagon' | 'octagon' | 'decagon' | 'duel';
+export type MatchMode = 'classic' | 'jodi' | 'pentagon' | 'hexagon' | 'octagon' | 'enneagon' | 'decagon' | 'duel';
 
 const FOUR_PLAYERS: Player[] = [
   { uid: 'you',   name: 'You',      color: 'blue',   index: 0, isBot: false, isHost: true,  isReady: true, isOnline: true },
@@ -92,8 +97,9 @@ interface GameScreenProps {
   state?: StateMode | ScreenStateMode;
   players?: Player[];
   humanUid?: string;
-  initialBoardType?: 'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon';
+  initialBoardType?: 'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon' | 'pentagon' | 'enneagon';
   initialMatchMode?: MatchMode;
+  initialTeamMode?: TeamMode;
   customSeats?: SeatConfig[];
   onOpenSetup?: () => void;
 }
@@ -107,12 +113,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   humanUid = 'you',
   initialBoardType = 'classic',
   initialMatchMode,
+  initialTeamMode,
   customSeats,
 }) => {
   const [matchMode, setMatchMode] = useState<MatchMode>(() => {
     if (initialMatchMode) return initialMatchMode;
+    if (initialBoardType === 'pentagon') return 'pentagon';
     if (initialBoardType === 'hexagon') return 'hexagon';
     if (initialBoardType === 'octagon') return 'octagon';
+    if (initialBoardType === 'enneagon') return 'enneagon';
     if (initialBoardType === 'jodi') return 'jodi';
     if (initialBoardType === 'decagon') return 'decagon';
     if (initialBoardType === 'duel') return 'duel';
@@ -265,13 +274,52 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     passAndPlay ? undefined : humanUid
   );
 
+  // =========================================================================
+  // 5. POLYGONAL ENGINE (5-Player Pentagon, 9-Player Enneagon)
+  // =========================================================================
+  const isPentagon = matchMode === 'pentagon';
+  const isEnneagon = matchMode === 'enneagon';
+  const isPolygonal = isPentagon || isEnneagon;
+  const polyBoardType: BoardPlayerCount = isPentagon ? 5 : 9;
+
+  const [activeTeamMode, setActiveTeamMode] = useState<TeamMode>(initialTeamMode ?? 'individual');
+
+  const polyPlayers: Player[] = useMemo(() => {
+    const count = polyBoardType;
+    const config = getBoardConfig(count);
+    return Array.from({ length: count }, (_, i) => {
+      const s = activeSeats?.[i];
+      const sec = config.sectors[i];
+      return {
+        uid: i === 0 ? 'you' : `bot-${i}`,
+        name: s?.name || (i === 0 ? 'You' : `Player ${i + 1} (Bot)`),
+        color: (sec?.name?.toLowerCase() ?? 'blue') as any,
+        index: i,
+        isBot: passAndPlay ? false : (s ? s.isBot : i !== 0),
+        isHost: i === 0,
+        isReady: true,
+        isOnline: true,
+      };
+    });
+  }, [polyBoardType, activeSeats, passAndPlay]);
+
+  const polygonalGame = usePolygonalLudo(
+    polyBoardType,
+    polyPlayers,
+    activeTeamMode,
+    { autoPlayBots: !passAndPlay },
+    passAndPlay ? undefined : humanUid
+  );
+
   // Active Game State Router
   const isHexagon = matchMode === 'hexagon';
   const isOctagon = matchMode === 'octagon';
   const isDecagon = matchMode === 'decagon';
-  const isClassicLike = !isHexagon && !isOctagon && !isDecagon;
+  const isClassicLike = !isHexagon && !isOctagon && !isDecagon && !isPolygonal;
 
-  const activeDiceVal = isOctagon
+  const activeDiceVal = isPolygonal
+    ? polygonalGame.state.diceValue
+    : isOctagon
     ? octagonGame.state.diceValue
     : isDecagon
     ? decagonGame.state.diceValue
@@ -279,7 +327,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     ? hexagonGame.state.diceValue
     : classicGame.state.diceValue;
 
-  const activeIsRolling = isOctagon
+  const activeIsRolling = isPolygonal
+    ? polygonalGame.isRolling
+    : isOctagon
     ? octagonGame.isRolling
     : isDecagon
     ? decagonGame.isRolling
@@ -287,7 +337,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     ? hexagonGame.isRolling
     : classicGame.isRolling;
 
-  const activeTimeLeft = isOctagon
+  const activeTimeLeft = isPolygonal
+    ? polygonalGame.timeLeft
+    : isOctagon
     ? octagonGame.timeLeft
     : isDecagon
     ? decagonGame.timeLeft
@@ -295,7 +347,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     ? hexagonGame.timeLeft
     : classicGame.timeLeft;
 
-  const activeIsHumanTurn = isOctagon
+  const activeIsHumanTurn = isPolygonal
+    ? polygonalGame.isHumanTurn
+    : isOctagon
     ? octagonGame.isHumanTurn
     : isDecagon
     ? decagonGame.isHumanTurn
@@ -303,7 +357,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     ? hexagonGame.isHumanTurn
     : classicGame.isHumanTurn;
 
-  const activePhase = isOctagon
+  const activePhase = isPolygonal
+    ? polygonalGame.state.phase
+    : isOctagon
     ? octagonGame.state.phase
     : isDecagon
     ? decagonGame.state.phase
@@ -313,6 +369,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({
 
   // Active color for dice ring and badges
   const activeColorHex = useMemo(() => {
+    if (isPolygonal) {
+      const config = getBoardConfig(polyBoardType);
+      const cur = config.sectors[polygonalGame.state.activePlayerIndex];
+      return cur?.color ?? '#0055D4';
+    }
     if (isOctagon) {
       const cur = octagonGame.state.players.find((p) => p.sectorIndex === octagonGame.state.activePlayerIndex);
       return cur?.color ?? '#0055D4';
@@ -327,9 +388,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     }
     const cur = classicGame.state.players[classicGame.state.activePlayerIndex];
     return PLAYER_COLORS[cur?.color ?? 'blue'] || COLORS.blue;
-  }, [isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
+  }, [isPolygonal, polyBoardType, polygonalGame.state, isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
 
   const activePlayerName = useMemo(() => {
+    if (isPolygonal) {
+      const cur = polyPlayers[polygonalGame.state.activePlayerIndex];
+      return cur?.name ?? `Player ${polygonalGame.state.activePlayerIndex + 1}`;
+    }
     if (isOctagon) {
       const cur = octagonGame.state.players.find((p) => p.sectorIndex === octagonGame.state.activePlayerIndex);
       return cur?.name ?? `Player ${octagonGame.state.activePlayerIndex + 1}`;
@@ -344,7 +409,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
     }
     const cur = classicGame.state.players[classicGame.state.activePlayerIndex];
     return cur?.name ?? `Player ${classicGame.state.activePlayerIndex + 1}`;
-  }, [isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
+  }, [isPolygonal, polyPlayers, polygonalGame.state, isOctagon, isDecagon, isHexagon, octagonGame.state, decagonGame.state, hexagonGame.state, classicGame.state]);
 
   // Jodi partner assist detection
   const isJodiPartnerAssist = useMemo(() => {
@@ -353,14 +418,16 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   }, [matchMode, classicGame.state]);
 
   const handleRoll = () => {
-    if (isOctagon) octagonGame.roll();
+    if (isPolygonal) polygonalGame.roll();
+    else if (isOctagon) octagonGame.roll();
     else if (isDecagon) decagonGame.roll();
     else if (isHexagon) hexagonGame.roll();
     else classicGame.roll();
   };
 
   const handleRestart = () => {
-    if (isOctagon) octagonGame.restart();
+    if (isPolygonal) polygonalGame.restart();
+    else if (isOctagon) octagonGame.restart();
     else if (isDecagon) decagonGame.restart();
     else if (isHexagon) hexagonGame.restart();
     else classicGame.restart();
@@ -369,12 +436,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   const handleSetupComplete = (result: MatchSetupResult) => {
     setMatchMode(result.matchMode);
     setActiveSeats(result.seats);
+    setActiveTeamMode(result.teamMode);
     setSetupModalOpen(false);
   };
 
   // Turn notification sound & haptic alert
   const prevTurnRef = useRef<number | null>(null);
-  const activeTurn = isOctagon
+  const activeTurn = isPolygonal
+    ? polygonalGame.state.activePlayerIndex
+    : isOctagon
     ? octagonGame.state.activePlayerIndex
     : isDecagon
     ? decagonGame.state.activePlayerIndex
@@ -406,8 +476,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         soundEngine.playVictory();
       }
       haptics.tokenHome();
+      const winnerIdx = isPolygonal ? (polygonalGame.state.winner ?? 0) : 0;
+      onWinner(winnerIdx);
     }
-  }, [activePhase, soundEnabled]);
+  }, [activePhase, soundEnabled, isPolygonal, polygonalGame.state.winner, onWinner]);
 
   // Cross-platform desktop/macOS keyboard shortcuts: Space to roll, Esc for menu
   useEffect(() => {
@@ -476,6 +548,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             type="button"
             onClick={() => {
               soundEngine.playButtonTap();
+              setMatchMode('pentagon');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'pentagon'
+                ? 'bg-purple-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            ⬟ Pentagon 5P
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
               setMatchMode('hexagon');
             }}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
@@ -506,11 +593,26 @@ export const GameScreen: React.FC<GameScreenProps> = ({
             type="button"
             onClick={() => {
               soundEngine.playButtonTap();
+              setMatchMode('enneagon');
+            }}
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+              matchMode === 'enneagon'
+                ? 'bg-emerald-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            💠 Enneagon 9P
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              soundEngine.playButtonTap();
               setMatchMode('decagon');
             }}
             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
               matchMode === 'decagon'
-                ? 'bg-purple-600 text-white shadow-md'
+                ? 'bg-rose-600 text-white shadow-md'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -611,6 +713,37 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         </div>
       )}
 
+      {/* Polygonal Player Status HUD Bar (Supports 5P Pentagon, 6P, 8P, 9P, 10P) */}
+      {isPolygonal && (
+        <div className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-black/40 border-b border-white/5 overflow-x-auto no-scrollbar shrink-0">
+          {polyPlayers.map((p, idx) => {
+            const isActive = polygonalGame.state.activePlayerIndex === idx;
+            const sec = getBoardConfig(polyBoardType).sectors[idx];
+            const colorHex = sec?.color ?? '#3B82F6';
+            const playerTokens = polygonalGame.state.tokens.filter((t) => t.playerIndex === idx);
+            const finishedCount = playerTokens.filter(
+              (t) => t.position === getBoardConfig(polyBoardType).winPosition
+            ).length;
+
+            return (
+              <div
+                key={p.uid}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all border ${
+                  isActive ? 'bg-white/15 shadow-md scale-105' : 'bg-white/5 opacity-70'
+                }`}
+                style={{
+                  borderColor: isActive ? colorHex : 'rgba(255,255,255,0.1)',
+                }}
+              >
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorHex }} />
+                <span className="text-white truncate max-w-[70px]">{p.name}</span>
+                <span className="text-[10px] text-amber-300 font-extrabold">({finishedCount}/4)</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Turn Banner with Active Player Indicator & Guidance */}
       <div
         className="text-center text-xs py-1 px-4 shrink-0 font-medium flex items-center justify-center gap-2 border-b border-white/5"
@@ -625,11 +758,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         />
         <span className="font-semibold">
           {activePhase === 'ended'
-            ? matchMode === 'jodi'
+            ? isPolygonal && polygonalGame.state.winningTeam
+              ? `🏆 ${polygonalGame.state.winningTeam.name} Wins the Match!`
+              : matchMode === 'jodi'
               ? classicGame.state.winner === 0
                 ? '🏆 Team Alpha (You & Marcus) Wins Jodi Match!'
                 : '🏆 Team Beta (Samantha & Devin) Wins Jodi Match!'
-              : '🏆 Match Finished!'
+              : `🏆 Match Finished! ${activePlayerName} Wins!`
             : isJodiPartnerAssist
             ? `🤝 Partner Assist: ${activePlayerName} is rolling to move partner's token!`
             : passAndPlay || activeIsHumanTurn
@@ -646,7 +781,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       {/* BOARD VIEWPORT                                            */}
       {/* ========================================================= */}
       <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
-        {isOctagon ? (
+        {isPolygonal ? (
+          <PolygonalLudoBoard
+            playerCount={polyBoardType}
+            tokens={polygonalGame.state.tokens}
+            activePlayerIndex={polygonalGame.state.activePlayerIndex}
+            legalMoves={polygonalGame.legalMoves}
+            onTokenClick={polygonalGame.selectToken}
+            teamMode={activeTeamMode}
+            inputLocked={polygonalGame.isRolling || (!passAndPlay && !polygonalGame.isHumanTurn)}
+            size={Math.min(window.innerWidth - 16, 420)}
+          />
+        ) : isOctagon ? (
           <OctagonalLudoBoard
             state={octagonGame.state}
             legalMoves={octagonGame.legalMoves}

@@ -1,10 +1,12 @@
 // src/components/ludoverse/MatchSetupModal.tsx
-// Comprehensive Match Lobby Setup Modal for 2, 4, 6, 8, and 10 player Ludo matches.
-// Allows human/bot seat toggles, AI difficulty (Easy, Balanced, Hard), teams (FFA vs Jodi 2v2), and timer presets.
+// Comprehensive Match Lobby Setup Modal for 4, 5, 6, 8, 9, and 10 player polygonal Ludo boards.
+// Configures Board Type, Solo vs Team Modes (Pairs, Trios, Squads), Auto-balance opposite partners vs custom team assignment, AI difficulty, and turn timers.
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { soundEngine } from '../../utils/audio';
 import { MatchMode } from './GameScreen';
+import { TeamMode, getTeamsForMatch } from '../../games/ludo/teamRules';
+import { BoardPlayerCount } from '../../games/ludo/polygonalBoardGeometry';
 
 export type BotDifficulty = 'easy' | 'normal' | 'hard';
 
@@ -15,12 +17,14 @@ export interface SeatConfig {
   label: string;
   isBot: boolean;
   botDifficulty: BotDifficulty;
-  teamId?: number; // 0 = Alpha, 1 = Beta
+  teamId?: number;
 }
 
 export interface MatchSetupResult {
   matchMode: MatchMode;
-  playerCount: 2 | 4 | 6 | 8 | 10;
+  playerCount: BoardPlayerCount | 2;
+  teamMode: TeamMode;
+  teamAssignment: 'auto_opposite' | 'custom_manual';
   seats: SeatConfig[];
   turnDurationSeconds: number;
 }
@@ -32,18 +36,15 @@ interface MatchSetupModalProps {
   initialMode?: MatchMode;
 }
 
-const DEFAULT_COLORS = [
-  '#0055D4', // Blue
-  '#00AA33', // Green
-  '#FACC15', // Yellow
-  '#E11D48', // Red
-  '#8B5CF6', // Purple
-  '#00D4FF', // Cyan
-  '#EA580C', // Orange
-  '#D946EF', // Magenta
-  '#00BFA5', // Teal
-  '#84CC16', // Lime
-];
+const BOARD_COLORS: Record<number, string[]> = {
+  2: ['#0055D4', '#00AA33'],
+  4: ['#0055D4', '#00AA33', '#FACC15', '#E11D48'],
+  5: ['#0055D4', '#00AA33', '#FACC15', '#E11D48', '#8B5CF6'],
+  6: ['#0055D4', '#00AA33', '#FACC15', '#E11D48', '#8B5CF6', '#00D4FF'],
+  8: ['#0055D4', '#00D4FF', '#E600AA', '#6F00FF', '#FFD700', '#FF7700', '#EE1122', '#00AA33'],
+  9: ['#0055D4', '#00D4FF', '#00BFA5', '#00AA33', '#84CC16', '#FACC15', '#EA580C', '#E11D48', '#8B5CF6'],
+  10: ['#0055D4', '#00D4FF', '#00BFA5', '#00AA33', '#84CC16', '#FACC15', '#EA580C', '#E11D48', '#D946EF', '#8B5CF6'],
+};
 
 export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
   open,
@@ -52,19 +53,89 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
   initialMode = 'classic',
 }) => {
   const [matchMode, setMatchMode] = useState<MatchMode>(initialMode);
+  const [teamMode, setTeamMode] = useState<TeamMode>(initialMode === 'jodi' ? 'pairs_2p' : 'individual');
+  const [teamAssignment, setTeamAssignment] = useState<'auto_opposite' | 'custom_manual'>('auto_opposite');
   const [turnTimerSec, setTurnTimerSec] = useState<15 | 30 | 60>(30);
 
-  const playerCount: 2 | 4 | 6 | 8 | 10 =
-    matchMode === 'duel' ? 2 : matchMode === 'hexagon' as any ? 6 : matchMode === 'octagon' ? 8 : matchMode === 'decagon' ? 10 : 4;
+  const playerCount: BoardPlayerCount | 2 = useMemo(() => {
+    switch (matchMode) {
+      case 'duel': return 2;
+      case 'pentagon': return 5;
+      case 'hexagon': return 6;
+      case 'octagon': return 8;
+      case 'enneagon': return 9;
+      case 'decagon': return 10;
+      case 'classic':
+      case 'jodi':
+      default: return 4;
+    }
+  }, [matchMode]);
 
-  // Initialize seats based on matchMode
-  const [seats, setSeats] = useState<SeatConfig[]>(() => buildDefaultSeats(initialMode));
+  // Available game modes for selected board
+  const availableModes = useMemo(() => {
+    const list: { id: TeamMode; label: string; desc: string }[] = [
+      { id: 'individual', label: 'Solo FFA', desc: 'Free-For-All solo battle' },
+    ];
 
-  // Sync seats when match mode changes
-  const handleModeChange = (mode: MatchMode) => {
+    if (playerCount === 4 || playerCount === 6 || playerCount === 8 || playerCount === 10) {
+      list.push({
+        id: 'pairs_2p',
+        label: playerCount === 4 ? 'Jodi 2v2' : '2-Player Pairs',
+        desc: 'Opposite seating partners with auto-balance',
+      });
+    }
+
+    if (playerCount === 6 || playerCount === 9) {
+      list.push({
+        id: 'trios_3p',
+        label: '3-Player Trios',
+        desc: playerCount === 6 ? '2 Trios (3 vs 3)' : '3 Trios (3 x 3)',
+      });
+    }
+
+    if (playerCount === 8) {
+      list.push({
+        id: 'squads_4v4',
+        label: 'Squads (4 vs 4)',
+        desc: 'Even vs Odd sector teams',
+      });
+    } else if (playerCount === 10) {
+      list.push({
+        id: 'squads_5v5',
+        label: 'Squads (5 vs 5)',
+        desc: 'Titan vs Phoenix 5v5 battle',
+      });
+    }
+
+    return list;
+  }, [playerCount]);
+
+  // Build seats based on playerCount and team allocations
+  const [seats, setSeats] = useState<SeatConfig[]>(() =>
+    buildSeats(playerCount, teamMode)
+  );
+
+  const handleBoardChange = (newMode: MatchMode) => {
     soundEngine.playToggleSwitch();
-    setMatchMode(mode);
-    setSeats(buildDefaultSeats(mode));
+    setMatchMode(newMode);
+
+    let count: BoardPlayerCount | 2 = 4;
+    if (newMode === 'duel') count = 2;
+    else if (newMode === 'pentagon') count = 5;
+    else if (newMode === 'hexagon') count = 6;
+    else if (newMode === 'octagon') count = 8;
+    else if (newMode === 'enneagon') count = 9;
+    else if (newMode === 'decagon') count = 10;
+
+    const newTeamMode = newMode === 'jodi' ? 'pairs_2p' : 'individual';
+    setTeamMode(newTeamMode);
+    setSeats(buildSeats(count, newTeamMode));
+  };
+
+  const handleTeamModeSelect = (newTeamMode: TeamMode) => {
+    soundEngine.playButtonTap();
+    setTeamMode(newTeamMode);
+    setSeats(buildSeats(playerCount, newTeamMode));
   };
 
   const handleToggleSeatType = (idx: number) => {
@@ -87,11 +158,20 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
     );
   };
 
+  const handleCustomTeamChange = (seatIdx: number, newTeamId: number) => {
+    soundEngine.playToggleSwitch();
+    setSeats((prev) =>
+      prev.map((s) => (s.seatIndex === seatIdx ? { ...s, teamId: newTeamId } : s))
+    );
+  };
+
   const handleLaunch = () => {
     soundEngine.playGameStartChime();
     onStartMatch({
       matchMode,
       playerCount,
+      teamMode,
+      teamAssignment,
       seats,
       turnDurationSeconds: turnTimerSec,
     });
@@ -100,16 +180,18 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
   if (!open) return null;
 
+  const currentTeams = getTeamsForMatch(typeof playerCount === 'number' ? playerCount : 4, teamMode);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/80 backdrop-blur-xs">
-      <div className="w-full max-w-lg bg-[#1E2235] border border-white/15 rounded-[24px] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+      <div className="w-full max-w-lg bg-[#151B2B] border border-white/15 rounded-[24px] shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 shrink-0 bg-[#252A42]">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/10 shrink-0 bg-[#1A2238]">
           <div className="flex items-center gap-2">
-            <span className="text-xl">⚙️</span>
+            <span className="text-xl">🎲</span>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">Match Setup & Player Lobby</h2>
-              <p className="text-[11px] text-slate-400">Configure seats, bot AI difficulty, and rules</p>
+              <h2 className="text-sm font-bold text-white tracking-wide">Multi-Player Ludo Match Setup</h2>
+              <p className="text-[11px] text-slate-400">Select board geometry, team modes, and players</p>
             </div>
           </div>
           <button
@@ -123,56 +205,43 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-4 overflow-y-auto space-y-4 text-xs text-slate-300 pr-2">
-          {/* 1. Board & Player Count Selector */}
+          {/* 1. Board Type Selection */}
           <div>
             <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Select Board & Player Count
+              1. Select Board Geometry ({playerCount} Players)
             </label>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => handleModeChange('duel')}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
-                  matchMode === 'duel'
-                    ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-md'
+                onClick={() => handleBoardChange('classic')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                  matchMode === 'classic' || matchMode === 'jodi'
+                    ? 'bg-amber-600/30 border-amber-500 text-amber-300 shadow-md'
                     : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
                 }`}
               >
-                <span>⚔️ 2P Duel</span>
-                <span className="text-[9px] font-normal text-slate-400">1v1 Classic</span>
+                <span>🟦 Standard 4P</span>
+                <span className="text-[9px] font-normal text-slate-400">Classic Square</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleModeChange('classic')}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
-                  matchMode === 'classic'
-                    ? 'bg-[#E85A0C]/30 border-[#E85A0C] text-[#FF9E66] shadow-md'
+                onClick={() => handleBoardChange('pentagon')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                  matchMode === 'pentagon'
+                    ? 'bg-purple-600/30 border-purple-500 text-purple-300 shadow-md'
                     : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
                 }`}
               >
-                <span>🪵 Classic 4P</span>
-                <span className="text-[9px] font-normal text-slate-400">Free For All</span>
+                <span>⬟ Pentagon 5P</span>
+                <span className="text-[9px] font-normal text-slate-400">5 Radial Arms</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleModeChange('jodi')}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
-                  matchMode === 'jodi'
-                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-md'
-                    : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
-                }`}
-              >
-                <span>🤝 Jodi 2v2</span>
-                <span className="text-[9px] font-normal text-slate-400">Team Partnership</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleModeChange('hexagon' as any)}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
-                  (matchMode as any) === 'hexagon'
+                onClick={() => handleBoardChange('hexagon')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                  matchMode === 'hexagon'
                     ? 'bg-teal-600/30 border-teal-500 text-teal-300 shadow-md'
                     : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
                 }`}
@@ -183,57 +252,147 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => handleModeChange('octagon')}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                onClick={() => handleBoardChange('octagon')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
                   matchMode === 'octagon'
-                    ? 'bg-indigo-600/30 border-indigo-500 text-indigo-300 shadow-md'
+                    ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-md'
                     : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
                 }`}
               >
                 <span>🔷 Octagon 8P</span>
-                <span className="text-[9px] font-normal text-slate-400">Strict 8 Players</span>
+                <span className="text-[9px] font-normal text-slate-400">8 Apex Sectors</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleModeChange('decagon')}
-                className={`py-2 px-2.5 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                onClick={() => handleBoardChange('enneagon')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
+                  matchMode === 'enneagon'
+                    ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 shadow-md'
+                    : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>💠 Non-Sym 9P</span>
+                <span className="text-[9px] font-normal text-slate-400">9 Arms Enneagon</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleBoardChange('decagon')}
+                className={`py-2 px-2 rounded-xl font-bold flex flex-col items-center gap-0.5 border transition-all ${
                   matchMode === 'decagon'
-                    ? 'bg-purple-600/30 border-purple-500 text-purple-300 shadow-md'
+                    ? 'bg-rose-600/30 border-rose-500 text-rose-300 shadow-md'
                     : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
                 }`}
               >
                 <span>⭐ Decagon 10P</span>
-                <span className="text-[9px] font-normal text-slate-400">Grand 10 Players</span>
+                <span className="text-[9px] font-normal text-slate-400">10 Grand Arms</span>
               </button>
             </div>
           </div>
 
-          {/* 2. Seat Configuration & Bot AI Selector */}
+          {/* 2. Game Mode Selection */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+              2. Select Game Mode & Team Rules
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {availableModes.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => handleTeamModeSelect(m.id)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    teamMode === m.id
+                      ? 'bg-blue-600/25 border-blue-500 text-blue-200'
+                      : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <div className="font-bold text-xs">{m.label}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {/* Team Rules Quick Reference */}
+            {teamMode !== 'individual' && (
+              <div className="mt-2 p-2.5 rounded-xl bg-blue-950/40 border border-blue-500/30 text-[11px] space-y-1 text-blue-200">
+                <div className="font-bold flex items-center gap-1.5 text-blue-300">
+                  <span>🛡️</span> Team Rules Activated:
+                </div>
+                <div>• <strong>Safe Passthrough</strong>: Cannot capture friendly teammate tokens.</div>
+                <div>• <strong>Teammate Shield</strong>: 2 team tokens on 1 tile block opponents.</div>
+                <div>• <strong>Roll Sharing</strong>: Finished players roll to help active teammates.</div>
+                <div>• <strong>Team Victory</strong>: Wins when all tokens of all members are HOME.</div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Team Assignment Strategy (Auto-Balance vs Manual) */}
+          {teamMode !== 'individual' && (
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                3. Team Assignment Method
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playToggleSwitch();
+                    setTeamAssignment('auto_opposite');
+                    setSeats(buildSeats(playerCount, teamMode));
+                  }}
+                  className={`p-2 rounded-xl border text-center font-bold text-xs transition-all ${
+                    teamAssignment === 'auto_opposite'
+                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
+                      : 'bg-black/20 border-white/10 text-slate-400'
+                  }`}
+                >
+                  🎯 Auto-Balance (Opposite Partners)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    soundEngine.playToggleSwitch();
+                    setTeamAssignment('custom_manual');
+                  }}
+                  className={`p-2 rounded-xl border text-center font-bold text-xs transition-all ${
+                    teamAssignment === 'custom_manual'
+                      ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300'
+                      : 'bg-black/20 border-white/10 text-slate-400'
+                  }`}
+                >
+                  ✍️ Custom Manual Slots
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 4. Seat Roster Configuration */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Seat Configuration ({seats.length} Players)
+                Seat Configuration ({seats.length} Slots)
               </label>
               <button
                 type="button"
-                onClick={() => setSeats(buildDefaultSeats(matchMode))}
+                onClick={() => setSeats(buildSeats(playerCount, teamMode))}
                 className="text-[10px] text-amber-400 hover:underline"
               >
-                Reset Seats
+                Reset Default
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
               {seats.map((seat) => (
                 <div
                   key={`seat-${seat.seatIndex}`}
-                  className="p-2.5 rounded-xl bg-black/25 border border-white/10 flex items-center justify-between gap-2"
+                  className="p-2 rounded-xl bg-black/30 border border-white/10 flex items-center justify-between gap-2"
                 >
-                  {/* Left: Color Chip & Name */}
-                  <div className="flex items-center gap-2 min-w-[120px]">
+                  {/* Left: Color & Name */}
+                  <div className="flex items-center gap-2 min-w-[130px]">
                     <span
-                      className="w-4 h-4 rounded-full border border-white/40 shrink-0"
+                      className="w-3.5 h-3.5 rounded-full border border-white/40 shrink-0"
                       style={{ background: seat.colorHex }}
                     />
                     <div className="flex flex-col">
@@ -241,112 +400,110 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
                         type="text"
                         value={seat.name}
                         onChange={(e) => handleNameChange(seat.seatIndex, e.target.value)}
-                        className="bg-transparent border-none text-xs font-bold text-white focus:outline-none max-w-[100px]"
+                        className="bg-transparent border-b border-transparent hover:border-white/30 focus:border-amber-400 focus:outline-none text-[11px] font-semibold text-white w-24 truncate"
                       />
-                      {matchMode === 'jodi' && seat.teamId !== undefined && (
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded w-max ${
-                            seat.teamId === 0
-                              ? 'bg-blue-500/20 text-blue-300'
-                              : 'bg-red-500/20 text-red-300'
-                          }`}
-                        >
-                          Team {seat.teamId === 0 ? 'Alpha' : 'Beta'}
-                        </span>
-                      )}
+                      <span className="text-[9px] text-slate-400">
+                        Sector {seat.label}
+                        {seat.teamId !== undefined && teamMode !== 'individual' && (
+                          <span className="ml-1 text-blue-300 font-bold">
+                            (Team {seat.teamId + 1})
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Middle: Human vs Bot Toggle */}
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSeatType(seat.seatIndex)}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
-                      !seat.isBot
-                        ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                        : 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-                    }`}
-                  >
-                    {!seat.isBot ? '👤 Human' : '🤖 Bot'}
-                  </button>
-
-                  {/* Right: Bot Difficulty (if bot) */}
-                  {seat.isBot ? (
-                    <div className="flex items-center gap-1 bg-black/30 p-0.5 rounded-lg border border-white/5">
-                      {(['easy', 'normal', 'hard'] as BotDifficulty[]).map((diff) => (
-                        <button
-                          key={diff}
-                          type="button"
-                          onClick={() => handleDifficultyChange(seat.seatIndex, diff)}
-                          className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase transition-all ${
-                            seat.botDifficulty === diff
-                              ? diff === 'easy'
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : diff === 'normal'
-                                ? 'bg-amber-600 text-white shadow-xs'
-                                : 'bg-rose-600 text-white shadow-xs'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          {diff[0]}
-                        </button>
+                  {/* Custom Team Selector if in manual mode */}
+                  {teamAssignment === 'custom_manual' && teamMode !== 'individual' && (
+                    <select
+                      value={seat.teamId ?? 0}
+                      onChange={(e) => handleCustomTeamChange(seat.seatIndex, Number(e.target.value))}
+                      className="bg-black/50 border border-white/20 rounded-md text-[10px] text-white px-1 py-0.5"
+                    >
+                      {currentTeams.map((t) => (
+                        <option key={t.teamId} value={t.teamId}>
+                          {t.name}
+                        </option>
                       ))}
-                    </div>
-                  ) : (
-                    <span className="text-[10px] text-slate-500 italic pr-2">Local Player</span>
+                    </select>
                   )}
+
+                  {/* Right: Human / Bot Toggle */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSeatType(seat.seatIndex)}
+                      className={`px-2 py-0.5 rounded-md font-bold text-[10px] border transition-all ${
+                        seat.isBot
+                          ? 'bg-purple-900/40 border-purple-500/50 text-purple-300'
+                          : 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300'
+                      }`}
+                    >
+                      {seat.isBot ? '🤖 Bot' : '👤 You'}
+                    </button>
+
+                    {seat.isBot && (
+                      <select
+                        value={seat.botDifficulty}
+                        onChange={(e) =>
+                          handleDifficultyChange(seat.seatIndex, e.target.value as BotDifficulty)
+                        }
+                        className="bg-black/50 border border-white/20 rounded-md text-[10px] text-slate-200 px-1 py-0.5"
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="normal">Normal</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* 3. Turn Timer Preset */}
+          {/* 5. Turn Timer Preset */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+            <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
               Turn Timer Preset
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {[
-                { sec: 15, label: '⚡ 15s Blitz' },
-                { sec: 30, label: '⏱️ 30s Standard' },
-                { sec: 60, label: '🧘 60s Relaxed' },
-              ].map((opt) => (
+              {[15, 30, 60].map((t) => (
                 <button
-                  key={opt.sec}
+                  key={t}
                   type="button"
                   onClick={() => {
                     soundEngine.playButtonTap();
-                    setTurnTimerSec(opt.sec as any);
+                    setTurnTimerSec(t as any);
                   }}
-                  className={`py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                    turnTimerSec === opt.sec
-                      ? 'bg-blue-600/30 border-blue-500 text-blue-300 shadow-xs'
-                      : 'bg-black/20 border-white/10 text-slate-400 hover:text-white'
+                  className={`py-1.5 rounded-lg border font-bold text-center text-xs transition-all ${
+                    turnTimerSec === t
+                      ? 'bg-amber-500/30 border-amber-500 text-amber-300'
+                      : 'bg-black/20 border-white/10 text-slate-400'
                   }`}
                 >
-                  {opt.label}
+                  ⏱️ {t}s {t === 30 ? '(Standard)' : t === 15 ? '(Blitz)' : '(Relaxed)'}
                 </button>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Modal Footer Actions */}
-        <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 bg-[#252A42]">
+        {/* Modal Footer */}
+        <div className="px-5 py-3 border-t border-white/10 bg-[#1A2238] flex items-center justify-between shrink-0">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border border-white/10 text-xs font-bold text-slate-300 hover:bg-white/5 active:scale-98 transition-all"
+            className="px-3.5 py-1.5 rounded-xl border border-white/20 text-slate-300 hover:text-white font-medium text-xs"
           >
             Cancel
           </button>
+
           <button
             type="button"
             onClick={handleLaunch}
-            className="flex-1 py-2.5 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-98 transition-all shadow-lg flex items-center justify-center gap-2"
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-black text-xs tracking-wider shadow-lg flex items-center gap-1.5 transition-transform active:scale-95"
           >
-            <span>Start Battle</span>
-            <span>🎲</span>
+            <span>⚔️ Start Match</span>
           </button>
         </div>
       </div>
@@ -354,61 +511,20 @@ export const MatchSetupModal: React.FC<MatchSetupModalProps> = ({
   );
 };
 
-function buildDefaultSeats(mode: MatchMode | 'hexagon'): SeatConfig[] {
-  if (mode === 'duel') {
-    return [
-      { seatIndex: 0, name: 'You', colorHex: DEFAULT_COLORS[0], label: 'P1', isBot: false, botDifficulty: 'normal' },
-      { seatIndex: 1, name: 'Marcus Bot', colorHex: DEFAULT_COLORS[1], label: 'P2', isBot: true, botDifficulty: 'normal' },
-    ];
-  }
+function buildSeats(count: BoardPlayerCount | 2, teamMode: TeamMode): SeatConfig[] {
+  const colors = BOARD_COLORS[count] ?? BOARD_COLORS[4];
+  const teams = getTeamsForMatch(count, teamMode);
 
-  if (mode === 'jodi') {
-    return [
-      { seatIndex: 0, name: 'You', colorHex: DEFAULT_COLORS[0], label: 'P1', isBot: false, botDifficulty: 'normal', teamId: 0 },
-      { seatIndex: 1, name: 'Samantha Bot', colorHex: DEFAULT_COLORS[3], label: 'P2', isBot: true, botDifficulty: 'normal', teamId: 1 },
-      { seatIndex: 2, name: 'Marcus Bot', colorHex: DEFAULT_COLORS[1], label: 'P3', isBot: true, botDifficulty: 'normal', teamId: 0 },
-      { seatIndex: 3, name: 'Devin Bot', colorHex: DEFAULT_COLORS[2], label: 'P4', isBot: true, botDifficulty: 'normal', teamId: 1 },
-    ];
-  }
-
-  if ((mode as string) === 'hexagon') {
-    return [
-      { seatIndex: 0, name: 'You', colorHex: '#0055D4', label: '01', isBot: false, botDifficulty: 'normal' },
-      { seatIndex: 1, name: 'Green Bot', colorHex: '#00AA33', label: '02', isBot: true, botDifficulty: 'normal' },
-      { seatIndex: 2, name: 'Yellow Bot', colorHex: '#FACC15', label: '03', isBot: true, botDifficulty: 'normal' },
-      { seatIndex: 3, name: 'Red Bot', colorHex: '#E11D48', label: '04', isBot: true, botDifficulty: 'normal' },
-      { seatIndex: 4, name: 'Purple Bot', colorHex: '#8B5CF6', label: '05', isBot: true, botDifficulty: 'normal' },
-      { seatIndex: 5, name: 'Cyan Bot', colorHex: '#00D4FF', label: '06', isBot: true, botDifficulty: 'normal' },
-    ];
-  }
-
-  if (mode === 'octagon') {
-    return Array.from({ length: 8 }, (_, i) => ({
+  return Array.from({ length: count }, (_, i) => {
+    const team = teams.find((t) => t.playerIndices.includes(i));
+    return {
       seatIndex: i,
-      name: i === 0 ? 'You' : `Bot ${i + 1}`,
-      colorHex: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
-      label: `0${i + 1}`,
+      name: i === 0 ? 'You' : `Player ${i + 1} (Bot)`,
+      colorHex: colors[i % colors.length],
+      label: i < 9 ? `0${i + 1}` : `${i + 1}`,
       isBot: i !== 0,
       botDifficulty: 'normal',
-    }));
-  }
-
-  if (mode === 'decagon') {
-    return Array.from({ length: 10 }, (_, i) => ({
-      seatIndex: i,
-      name: i === 0 ? 'You' : `Bot ${i + 1}`,
-      colorHex: DEFAULT_COLORS[i % DEFAULT_COLORS.length],
-      label: i < 9 ? `0${i + 1}` : '10',
-      isBot: i !== 0,
-      botDifficulty: 'normal',
-    }));
-  }
-
-  // Classic 4P
-  return [
-    { seatIndex: 0, name: 'You', colorHex: DEFAULT_COLORS[0], label: 'P1', isBot: false, botDifficulty: 'normal' },
-    { seatIndex: 1, name: 'Samantha Bot', colorHex: DEFAULT_COLORS[3], label: 'P2', isBot: true, botDifficulty: 'normal' },
-    { seatIndex: 2, name: 'Marcus Bot', colorHex: DEFAULT_COLORS[1], label: 'P3', isBot: true, botDifficulty: 'normal' },
-    { seatIndex: 3, name: 'Devin Bot', colorHex: DEFAULT_COLORS[2], label: 'P4', isBot: true, botDifficulty: 'normal' },
-  ];
+      teamId: team?.teamId ?? i,
+    };
+  });
 }

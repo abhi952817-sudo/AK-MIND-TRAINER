@@ -1,13 +1,23 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Users, DoorOpen, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, Users, DoorOpen, Globe, Lock, Shield, Check } from 'lucide-react';
 import { Button, EmptyStateWidget, SkeletonBox, ErrorBanner, AppAvatar } from './UIComponents';
 import { ActiveRoomSummary, ScreenStateMode, StateMode } from '../../types/ludoverse';
+import { BoardPlayerCount } from '../../games/ludo/polygonalBoardGeometry';
+import { TeamMode } from '../../games/ludo/teamRules';
+
+export interface RoomConfigOptions {
+  isPrivate: boolean;
+  boardPlayerCount: BoardPlayerCount;
+  gameMode: 'solo' | 'team';
+  teamMode: TeamMode;
+  teamAssignment: 'opposite_auto' | 'custom_manual';
+}
 
 interface LobbyScreenProps {
   onBack: () => void;
   onJoinRoom?: (roomCode: string) => void;
-  onEnterRoom?: (roomCode: string) => void;
-  onCreateRoom?: (isPrivate: boolean, maxPlayers: 2 | 4) => void;
+  onEnterRoom?: (roomCode: string, options?: RoomConfigOptions) => void;
+  onCreateRoom?: (isPrivate: boolean, maxPlayers: number, options?: RoomConfigOptions) => void;
   activeRooms?: ActiveRoomSummary[];
   state?: StateMode | ScreenStateMode;
   stateMode?: ScreenStateMode;
@@ -25,8 +35,45 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'join' | 'create'>('join');
   const [codeDigits, setCodeDigits] = useState<string[]>(['', '', '', '']);
   const [isPrivate, setIsPrivate] = useState(false);
-  const [maxPlayers, setMaxPlayers] = useState<2 | 4>(4);
+  const [boardCount, setBoardCount] = useState<BoardPlayerCount>(4);
+  const [gameMode, setGameMode] = useState<'solo' | 'team'>('solo');
+  const [teamType, setTeamType] = useState<TeamMode>('jodi_2v2');
+  const [teamAssignment, setTeamAssignment] = useState<'opposite_auto' | 'custom_manual'>('opposite_auto');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Available team modes based on board count
+  const availableTeamModes: { id: TeamMode; label: string; desc: string }[] = (() => {
+    switch (boardCount) {
+      case 4:
+        return [{ id: 'jodi_2v2', label: '2v2 Pairs', desc: 'Opposite players form partners' }];
+      case 6:
+        return [
+          { id: 'pairs_2p', label: '3 Pairs (2 Players Each)', desc: 'Opposite partners across 6 arms' },
+          { id: 'trios_3p', label: '2 Trios (3 Players Each)', desc: 'Alternating triangle teams' },
+        ];
+      case 8:
+        return [
+          { id: 'pairs_2p', label: '4 Pairs (2 Players Each)', desc: 'Opposite partners across octagon' },
+          { id: 'squads_4v4', label: '4 vs 4 Squad Battle', desc: 'Two big teams facing off' },
+        ];
+      case 9:
+        return [
+          { id: 'trios_3p', label: '3 Trios (3 Players Each)', desc: 'Triangular alliance teams' },
+        ];
+      case 10:
+        return [
+          { id: 'pairs_2p', label: '5 Pairs (2 Players Each)', desc: 'Opposite partners across 10 arms' },
+          { id: 'squads_5v5', label: '5 vs 5 Squad Battle', desc: '5 players per super-team' },
+        ];
+      default:
+        return [];
+    }
+  })();
+
+  const canTeamMode = availableTeamModes.length > 0;
+  const effectiveTeamType = !canTeamMode || gameMode === 'solo' ? 'individual' : (
+    availableTeamModes.some(m => m.id === teamType) ? teamType : availableTeamModes[0].id
+  );
 
   const inputRefs = [
     useRef<HTMLInputElement>(null),
@@ -280,71 +327,181 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           </div>
         ) : (
           /* Create Room Tab */
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#16213E] border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#16213E] border border-slate-200 dark:border-slate-800 shadow-sm space-y-5">
+            {/* 1. Board Type Selection (4, 5, 6, 8, 9, 10 Players) */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-[#8D99AE] uppercase tracking-wider block">
+                  Select Board Layout
+                </label>
+                <span className="text-[11px] font-bold text-[#E63946] bg-[#E63946]/10 px-2 py-0.5 rounded-full">
+                  {boardCount} Players
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { count: 4, shape: 'Square', icon: '🎲' },
+                  { count: 5, shape: 'Pentagon', icon: '⬟' },
+                  { count: 6, shape: 'Hexagon', icon: '⬡' },
+                  { count: 8, shape: 'Octagon', icon: '🔷' },
+                  { count: 9, shape: 'Enneagon', icon: '💠' },
+                  { count: 10, shape: 'Decagon', icon: '⭐' },
+                ].map((b) => (
+                  <button
+                    key={b.count}
+                    type="button"
+                    onClick={() => {
+                      setBoardCount(b.count as BoardPlayerCount);
+                      if (b.count === 5) setGameMode('solo');
+                    }}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 text-center transition-all ${
+                      boardCount === b.count
+                        ? 'border-[#E63946] bg-[#E63946]/10 text-[#E63946] font-bold shadow-sm'
+                        : 'border-slate-200 dark:border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-xl">{b.icon}</span>
+                    <span className="text-xs font-bold leading-tight">{b.count}P</span>
+                    <span className="text-[10px] opacity-75">{b.shape}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. Game Mode Selection (Solo vs Team Mode) */}
+            <div>
+              <label className="text-xs font-semibold text-[#8D99AE] uppercase tracking-wider block mb-2">
+                Game Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setGameMode('solo')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    gameMode === 'solo'
+                      ? 'border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F] font-bold'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span className="text-xs font-bold">Solo FFA</span>
+                  <span className="text-[10px] opacity-75">Every player for themselves</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!canTeamMode}
+                  onClick={() => setGameMode('team')}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    !canTeamMode
+                      ? 'opacity-40 cursor-not-allowed border-slate-200 dark:border-slate-800 text-slate-400'
+                      : gameMode === 'team'
+                      ? 'border-[#E63946] bg-[#E63946]/10 text-[#E63946] font-bold'
+                      : 'border-slate-200 dark:border-slate-800 text-slate-400'
+                  }`}
+                >
+                  <Shield className="w-5 h-5" />
+                  <span className="text-xs font-bold">Team Mode</span>
+                  <span className="text-[10px] opacity-75">
+                    {canTeamMode ? 'Pairs / Trios / Squads' : 'Not for 5P'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. Team Configurations & Assignment (When Team Mode is active) */}
+            {gameMode === 'team' && canTeamMode && (
+              <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 space-y-3">
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Team Format
+                  </span>
+                  <div className="space-y-1.5">
+                    {availableTeamModes.map((tm) => (
+                      <button
+                        key={tm.id}
+                        type="button"
+                        onClick={() => setTeamType(tm.id)}
+                        className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between text-xs transition-all ${
+                          effectiveTeamType === tm.id
+                            ? 'border-[#E63946] bg-[#E63946]/15 text-[#E63946] font-bold'
+                            : 'border-slate-200 dark:border-slate-800 text-slate-300'
+                        }`}
+                      >
+                        <div>
+                          <div>{tm.label}</div>
+                          <div className="text-[10px] text-slate-400">{tm.desc}</div>
+                        </div>
+                        {effectiveTeamType === tm.id && <Check className="w-4 h-4 text-[#E63946] shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Team Assignment
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setTeamAssignment('opposite_auto')}
+                      className={`p-2 rounded-lg border text-center text-xs transition-all ${
+                        teamAssignment === 'opposite_auto'
+                          ? 'border-[#2A9D8F] bg-[#2A9D8F]/15 text-[#2A9D8F] font-bold'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <div className="font-semibold">Auto-Balance</div>
+                      <div className="text-[10px] opacity-75">Opposite Seating</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTeamAssignment('custom_manual')}
+                      className={`p-2 rounded-lg border text-center text-xs transition-all ${
+                        teamAssignment === 'custom_manual'
+                          ? 'border-[#2A9D8F] bg-[#2A9D8F]/15 text-[#2A9D8F] font-bold'
+                          : 'border-slate-200 dark:border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <div className="font-semibold">Custom Manual</div>
+                      <div className="text-[10px] opacity-75">Assign in Lobby</div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Visibility: segmented (Public | Private) */}
             <div>
               <label className="text-xs font-semibold text-[#8D99AE] uppercase tracking-wider block mb-2">
-                Visibility
+                Room Privacy
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setIsPrivate(false)}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                  className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-xs ${
                     !isPrivate
                       ? 'border-[#2A9D8F] bg-[#2A9D8F]/10 text-[#2A9D8F] font-bold'
                       : 'border-slate-300 dark:border-slate-700 text-[#8D99AE]'
                   }`}
                 >
-                  <Globe className="w-5 h-5" />
-                  <span className="text-xs">Public</span>
+                  <Globe className="w-4 h-4" />
+                  <span>Public Room</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsPrivate(true)}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
+                  className={`p-2.5 rounded-xl border flex items-center justify-center gap-1.5 transition-all text-xs ${
                     isPrivate
                       ? 'border-[#F4A261] bg-[#F4A261]/10 text-[#F4A261] font-bold'
                       : 'border-slate-300 dark:border-slate-700 text-[#8D99AE]'
                   }`}
                 >
-                  <Lock className="w-5 h-5" />
-                  <span className="text-xs">Private (Code Only)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Max Players: segmented (2P | 4P) */}
-            <div>
-              <label className="text-xs font-semibold text-[#8D99AE] uppercase tracking-wider block mb-2">
-                Max Players
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setMaxPlayers(2)}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                    maxPlayers === 2
-                      ? 'border-[#E63946] bg-[#E63946]/10 text-[#E63946] font-bold'
-                      : 'border-slate-300 dark:border-slate-700 text-[#8D99AE]'
-                  }`}
-                >
-                  <Users className="w-5 h-5" />
-                  <span className="text-xs">2P</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMaxPlayers(4)}
-                  className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${
-                    maxPlayers === 4
-                      ? 'border-[#E63946] bg-[#E63946]/10 text-[#E63946] font-bold'
-                      : 'border-slate-300 dark:border-slate-700 text-[#8D99AE]'
-                  }`}
-                >
-                  <Users className="w-5 h-5" />
-                  <span className="text-xs">4P</span>
+                  <Lock className="w-4 h-4" />
+                  <span>Private (Code)</span>
                 </button>
               </div>
             </div>
@@ -354,13 +511,20 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               variant="primary"
               onClick={() => {
                 const code = String(Math.floor(1000 + Math.random() * 9000));
-                onCreateRoom?.(isPrivate, maxPlayers);
-                onEnterRoom?.(code);
+                const roomOpts: RoomConfigOptions = {
+                  isPrivate,
+                  boardPlayerCount: boardCount,
+                  gameMode,
+                  teamMode: effectiveTeamType,
+                  teamAssignment,
+                };
+                onCreateRoom?.(isPrivate, boardCount, roomOpts);
+                onEnterRoom?.(code, roomOpts);
               }}
               isLoading={isLoading}
               className="w-full h-[52px]"
             >
-              Create Room
+              Create {boardCount}-Player Room
             </Button>
           </div>
         )}

@@ -6,8 +6,10 @@ import { PWAInstallButton } from '../pwa/PWAInstallButton';
 const GAMES = [
   { id: 'ludo', name: 'Ludo Classic (4P)', icon: '🎲', color: '#E85A0C', active: true },
   { id: 'ludojodi', name: 'Jodi 2v2 (Team Mode)', icon: '🤝', color: '#2563EB', active: true },
+  { id: 'ludo5', name: 'Pentagon Ludo (5P)', icon: '⬟', color: '#8B5CF6', active: true },
   { id: 'ludo6', name: 'Hexagon Ludo (6P)', icon: '⬡', color: '#10B981', active: true },
   { id: 'ludo8', name: 'Octagon Ludo (8P)', icon: '🔷', color: '#0055D4', active: true },
+  { id: 'ludo9', name: 'Enneagon Ludo (9P)', icon: '💠', color: '#00BFA5', active: true },
   { id: 'ludo10', name: 'Decagon Ludo (10P)', icon: '⭐', color: '#7C3AED', active: true },
   { id: 'snake', name: 'Snakes & Ladders', icon: '🐍', color: COLORS.green, active: true },
   { id: 'spin', name: 'Lucky Spin', icon: '🎡', color: COLORS.yellow, active: true },
@@ -62,7 +64,7 @@ export const HomeScreen: React.FC<{
 
   const handleGame = (id: string) => {
     if (id === 'ludo') return handleLudo();
-    if (id === 'ludojodi' || id === 'ludo6' || id === 'ludo8' || id === 'ludo10') {
+    if (id === 'ludojodi' || id === 'ludo5' || id === 'ludo6' || id === 'ludo8' || id === 'ludo9' || id === 'ludo10') {
       if (onSelectGame) onSelectGame(id);
       else handleLudo();
       return;

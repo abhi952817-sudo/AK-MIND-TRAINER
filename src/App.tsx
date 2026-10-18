@@ -7,7 +7,7 @@ import { SignupScreen } from './components/ludoverse/SignupScreen';
 import { ForgotPasswordScreen } from './components/ludoverse/ForgotPasswordScreen';
 import { HomeScreen } from './components/ludoverse/HomeScreen';
 import { ProfileScreen } from './components/ludoverse/ProfileScreen';
-import { LobbyScreen } from './components/ludoverse/LobbyScreen';
+import { LobbyScreen, RoomConfigOptions } from './components/ludoverse/LobbyScreen';
 import { RoomWaitingScreen } from './components/ludoverse/RoomWaitingScreen';
 import { ChatOverlay } from './components/ludoverse/ChatOverlay';
 import { GameScreen } from './components/ludoverse/GameScreen';
@@ -29,7 +29,14 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [roomCode, setRoomCode] = useState('');
   const [chatOpen, setChatOpen] = useState(false);
-  const [initialBoardType, setInitialBoardType] = useState<'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon'>('classic');
+  const [initialBoardType, setInitialBoardType] = useState<'classic' | 'octagon' | 'jodi' | 'decagon' | 'duel' | 'hexagon' | 'pentagon' | 'enneagon'>('classic');
+  const [roomOptions, setRoomOptions] = useState<RoomConfigOptions>({
+    isPrivate: false,
+    boardPlayerCount: 4,
+    gameMode: 'solo',
+    teamMode: 'individual',
+    teamAssignment: 'opposite_auto',
+  });
   const [soundSettingsOpen, setSoundSettingsOpen] = useState(false);
 
   // Coins state — starts as null (no fake data)
@@ -68,11 +75,17 @@ export default function App() {
               } else if (gId === 'ludojodi') {
                 setInitialBoardType('jodi');
                 setScreen('game');
+              } else if (gId === 'ludo5') {
+                setInitialBoardType('pentagon');
+                setScreen('game');
               } else if (gId === 'ludo6') {
                 setInitialBoardType('hexagon');
                 setScreen('game');
               } else if (gId === 'ludo8') {
                 setInitialBoardType('octagon');
+                setScreen('game');
+              } else if (gId === 'ludo9') {
+                setInitialBoardType('enneagon');
                 setScreen('game');
               } else if (gId === 'ludo10') {
                 setInitialBoardType('decagon');
@@ -93,14 +106,47 @@ export default function App() {
       case 'profile':
         return <ProfileScreen user={user} state={state} onBack={() => setScreen('home')} />;
       case 'lobby':
-        return <LobbyScreen state={state} onBack={() => setScreen('home')} onEnterRoom={(c) => { setRoomCode(c); setScreen('room'); }} />;
+        return (
+          <LobbyScreen
+            state={state}
+            onBack={() => setScreen('home')}
+            onEnterRoom={(c, opts) => {
+              setRoomCode(c);
+              if (opts) {
+                setRoomOptions(opts);
+                const countToType: Record<number, any> = {
+                  4: opts.gameMode === 'team' ? 'jodi' : 'classic',
+                  5: 'pentagon',
+                  6: 'hexagon',
+                  8: 'octagon',
+                  9: 'enneagon',
+                  10: 'decagon',
+                };
+                setInitialBoardType(countToType[opts.boardPlayerCount] || 'classic');
+              }
+              setScreen('room');
+            }}
+          />
+        );
       case 'room':
-        return <RoomWaitingScreen code={roomCode || 'ABCD'} onLeave={() => setScreen('lobby')} onStart={() => setScreen('game')} onChat={() => setChatOpen(true)} />;
+        return (
+          <RoomWaitingScreen
+            code={roomCode || 'ABCD'}
+            boardPlayerCount={roomOptions.boardPlayerCount}
+            gameMode={roomOptions.gameMode}
+            teamMode={roomOptions.teamMode}
+            teamAssignment={roomOptions.teamAssignment}
+            onLeave={() => setScreen('lobby')}
+            onStart={() => setScreen('game')}
+            onChat={() => setChatOpen(true)}
+          />
+        );
       case 'game':
         return (
           <GameScreen
             state={state}
             initialBoardType={initialBoardType}
+            initialTeamMode={roomOptions.teamMode}
             onQuit={() => setScreen('home')}
             onWinner={() => setScreen('winner')}
             onChat={() => setChatOpen(true)}

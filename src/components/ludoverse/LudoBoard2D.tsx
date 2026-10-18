@@ -56,7 +56,7 @@ const MAIN_PATH: [number, number][] = [
 ];
 // Total: 5+6+1+6+6+1+6+6+1+6+6+1+1 = 52 ✓
 
-const COLOR_TO_INDEX: Record<LudoColor, number> = {
+const COLOR_TO_INDEX: Record<string, number> = {
   red: 0,
   green: 1,
   yellow: 2,
@@ -101,7 +101,7 @@ const SAFE_CELLS = new Set([
   '12,8',  // Blue safe
 ]);
 
-export const LUDO_COLORS = {
+export const LUDO_COLORS: Record<string, string> = {
   red: '#E63946',
   green: '#2A9D8F',
   yellow: '#F4A261',

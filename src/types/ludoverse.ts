@@ -23,7 +23,7 @@ export type StateMode = 'data' | 'empty' | 'loading' | 'error';
 export type ScreenStateMode = 'DATA' | 'EMPTY' | 'LOADING' | 'ERROR' | StateMode;
 export type ThemeMode = 'dark' | 'light';
 export type DeviceMode = 'iphone' | 'pixel' | 'full';
-export type PlayerColor = 'red' | 'green' | 'yellow' | 'blue';
+export type PlayerColor = 'red' | 'green' | 'yellow' | 'blue' | string;
 export type LudoColor = PlayerColor;
 export type TokenPosition = 
   | { state: 'base' }        // in home base

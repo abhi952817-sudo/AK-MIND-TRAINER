@@ -121,7 +121,7 @@ export const RulesScreen: React.FC<RulesScreenProps> = ({ onClose }) => {
           </div>
         )}
 
-        {/* Section 4 — Team & Doubles (2v2) */}
+        {/* Section 4 — Team & Doubles (Pairs, Trios, Squads) */}
         {(activeTab === 'all' || activeTab === 'team') && (
           <div className="p-4 rounded-2xl bg-[#1E2235] border border-white/10 shadow-sm flex items-start gap-3.5">
             <div className="w-11 h-11 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
@@ -129,31 +129,32 @@ export const RulesScreen: React.FC<RulesScreenProps> = ({ onClose }) => {
             </div>
             <div className="flex-1">
               <h2 className="font-heading text-sm font-bold text-white mb-1.5">
-                4. Team Ludo (2v2 Partner Play)
+                4. Team Modes (Pairs, Trios, Squads)
               </h2>
               <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside leading-relaxed">
-                <li><strong className="text-white">Partner Setup:</strong> Opposing players sit across each other as teammates (e.g. Blue + Yellow vs Red + Green).</li>
-                <li><strong className="text-white">No Friendly Fire:</strong> You cannot capture your partner&apos;s tokens.</li>
-                <li><strong className="text-white">Partner Support:</strong> Once all 4 of your tokens reach home, your turns help move your partner&apos;s tokens!</li>
-                <li><strong className="text-white">Team Victory:</strong> First team to bring all 8 combined tokens home wins.</li>
+                <li><strong className="text-white">Supported Setups:</strong> 2-Player Pairs on 4, 6, 8, 10 boards; 3-Player Trios on 6 &amp; 9 boards; Squads on 8P (4v4) &amp; 10P (5v5).</li>
+                <li><strong className="text-white">Safe Passthrough:</strong> You cannot capture or cut friendly teammate tokens.</li>
+                <li><strong className="text-white">Teammate Shield (Blocker):</strong> When 2 tokens of the same team stand on a single tile, it forms an impassable shield for opponents (cannot land on or leap over).</li>
+                <li><strong className="text-white">Turn &amp; Roll Sharing:</strong> Once all 4 of your tokens reach HOME, your turns transfer to assist your active teammates!</li>
+                <li><strong className="text-white">Team Victory:</strong> A team wins only when ALL tokens of ALL team members reach the central HOME.</li>
               </ul>
             </div>
           </div>
         )}
 
-        {/* Section 5 — Safe Cells & Blockades */}
+        {/* Section 5 — Safe Cells & Board Geometries */}
         <div className="p-4 rounded-2xl bg-[#1E2235] border border-white/10 shadow-sm flex items-start gap-3.5">
           <div className="w-11 h-11 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
             <Shield className="w-6 h-6" />
           </div>
           <div className="flex-1">
             <h2 className="font-heading text-sm font-bold text-white mb-1.5">
-              5. Safe Zones & Blockades
+              5. Polygonal Boards (4 to 10 Players) &amp; Safe Zones
             </h2>
             <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside leading-relaxed">
-              <li><strong className="text-white">Star Cells (★):</strong> Completely immune to captures.</li>
-              <li><strong className="text-white">Home Runways:</strong> Colored corridors are exclusive to each player and 100% safe.</li>
-              <li><strong className="text-white">Blockades:</strong> Two tokens of the same color on a cell form a blockade that opponents cannot capture.</li>
+              <li><strong className="text-white">6 Board Geometries:</strong> Standard 4P, Pentagonal 5P, Hexagonal 6P, Octagonal 8P, Non-Symmetrical 9P, and Decagonal 10P.</li>
+              <li><strong className="text-white">Apex Stars (★):</strong> Outer vertex star tiles are safe zones immune to captures.</li>
+              <li><strong className="text-white">Home Runways:</strong> Colored radial corridors leading into the central triumph hub are 100% protected.</li>
             </ul>
           </div>
         </div>

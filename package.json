@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx tests/activeLudoEngine.test.ts && tsx tests/ludoverseDesignSystem.test.ts && tsx tests/ludoEngine.test.ts && tsx tests/gameStateLifecycle.test.ts && tsx tests/tokenMovementAnimation.test.ts && tsx tests/uiResponsiveness.test.ts && tsx tests/playerConfiguration.test.ts && tsx tests/audioEngine.test.ts && tsx tests/teamRules.test.ts && tsx tests/octagonal8P.test.ts && tsx tests/decagonal10P.test.ts && tsx tests/crossPlatformPwa.test.ts"
+    "test": "tsx tests/activeLudoEngine.test.ts && tsx tests/ludoverseDesignSystem.test.ts && tsx tests/ludoEngine.test.ts && tsx tests/gameStateLifecycle.test.ts && tsx tests/tokenMovementAnimation.test.ts && tsx tests/uiResponsiveness.test.ts && tsx tests/playerConfiguration.test.ts && tsx tests/audioEngine.test.ts && tsx tests/teamRules.test.ts && tsx tests/octagonal8P.test.ts && tsx tests/decagonal10P.test.ts && tsx tests/crossPlatformPwa.test.ts && tsx tests/polygonalLudoAndTeams.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
