@@ -21,6 +21,7 @@ import { InterstitialAdModal } from './components/ludoverse/ads/InterstitialAdMo
 import { SoundSettingsModal } from './components/ludoverse/SoundSettingsModal';
 import { OfflineIndicator } from './components/pwa/OfflineIndicator';
 import { toast } from './components/ludoverse/UIComponents';
+import { I18nProvider } from './utils/i18n';
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenId>('splash');
@@ -182,46 +183,48 @@ export default function App() {
   };
 
   return (
-    <div
-      className="w-full h-full relative flex flex-col"
-      style={{ background: theme === 'dark' ? COLORS.bgDark : COLORS.bgLight, color: theme === 'dark' ? '#fff' : COLORS.bgDark }}
-    >
-      <DesignInspectorToolbar
-        screen={screen}
-        setScreen={setScreen}
-        state={state}
-        setState={setState}
-        theme={theme}
-        setTheme={setTheme}
-      />
+    <I18nProvider>
+      <div
+        className="w-full h-full relative flex flex-col"
+        style={{ background: theme === 'dark' ? COLORS.bgDark : COLORS.bgLight, color: theme === 'dark' ? '#fff' : COLORS.bgDark }}
+      >
+        <DesignInspectorToolbar
+          screen={screen}
+          setScreen={setScreen}
+          state={state}
+          setState={setState}
+          theme={theme}
+          setTheme={setTheme}
+        />
 
-      <div className="pt-12 flex-1 overflow-hidden relative">
-        {renderScreen()}
+        <div className="pt-12 flex-1 overflow-hidden relative">
+          {renderScreen()}
+        </div>
+
+        {showBanner && <AdBanner />}
+
+        <ChatOverlay open={chatOpen} onClose={() => setChatOpen(false)} />
+
+        <RewardedAdModal
+          open={rewardedOpen}
+          rewardCoins={1}
+          onClose={() => setRewardedOpen(false)}
+          onReward={(n) => setCoins((c) => (c ?? 0) + n)}
+        />
+
+        <InterstitialAdModal
+          open={interstitialOpen}
+          duration={5}
+          onClose={() => setInterstitialOpen(false)}
+        />
+
+        <SoundSettingsModal
+          open={soundSettingsOpen}
+          onClose={() => setSoundSettingsOpen(false)}
+        />
+
+        <OfflineIndicator />
       </div>
-
-      {showBanner && <AdBanner />}
-
-      <ChatOverlay open={chatOpen} onClose={() => setChatOpen(false)} />
-
-      <RewardedAdModal
-        open={rewardedOpen}
-        rewardCoins={1}
-        onClose={() => setRewardedOpen(false)}
-        onReward={(n) => setCoins((c) => (c ?? 0) + n)}
-      />
-
-      <InterstitialAdModal
-        open={interstitialOpen}
-        duration={5}
-        onClose={() => setInterstitialOpen(false)}
-      />
-
-      <SoundSettingsModal
-        open={soundSettingsOpen}
-        onClose={() => setSoundSettingsOpen(false)}
-      />
-
-      <OfflineIndicator />
-    </div>
+    </I18nProvider>
   );
 }

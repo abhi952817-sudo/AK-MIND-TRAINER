@@ -1,18 +1,27 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { COLORS, StateMode, ScreenStateMode, User, UserProfile } from '../../types/ludoverse';
 import { Avatar, Skeleton, CoinBadge, toast } from './UIComponents';
 import { PWAInstallButton } from '../pwa/PWAInstallButton';
+import { useI18n, TranslationKey } from '../../utils/i18n';
 
-const GAMES = [
-  { id: 'ludo', name: 'Ludo Classic (4P)', icon: '🎲', color: '#E85A0C', active: true },
-  { id: 'ludojodi', name: 'Jodi 2v2 (Team Mode)', icon: '🤝', color: '#2563EB', active: true },
-  { id: 'ludo5', name: 'Pentagon Ludo (5P)', icon: '⬟', color: '#8B5CF6', active: true },
-  { id: 'ludo6', name: 'Hexagon Ludo (6P)', icon: '⬡', color: '#10B981', active: true },
-  { id: 'ludo8', name: 'Octagon Ludo (8P)', icon: '🔷', color: '#0055D4', active: true },
-  { id: 'ludo9', name: 'Enneagon Ludo (9P)', icon: '💠', color: '#00BFA5', active: true },
-  { id: 'ludo10', name: 'Decagon Ludo (10P)', icon: '⭐', color: '#7C3AED', active: true },
-  { id: 'snake', name: 'Snakes & Ladders', icon: '🐍', color: COLORS.green, active: true },
-  { id: 'spin', name: 'Lucky Spin', icon: '🎡', color: COLORS.yellow, active: true },
+interface GameItem {
+  id: string;
+  key: TranslationKey;
+  icon: string;
+  color: string;
+  active: boolean;
+}
+
+const GAME_DEFINITIONS: GameItem[] = [
+  { id: 'ludo', key: 'classic4P', icon: '🎲', color: '#E85A0C', active: true },
+  { id: 'ludojodi', key: 'jodi2v2', icon: '🤝', color: '#2563EB', active: true },
+  { id: 'ludo5', key: 'pentagon5P', icon: '⬟', color: '#8B5CF6', active: true },
+  { id: 'ludo6', key: 'hexagon6P', icon: '⬡', color: '#10B981', active: true },
+  { id: 'ludo8', key: 'octagon8P', icon: '🔷', color: '#0055D4', active: true },
+  { id: 'ludo9', key: 'enneagon9P', icon: '💠', color: '#00BFA5', active: true },
+  { id: 'ludo10', key: 'decagon10P', icon: '⭐', color: '#7C3AED', active: true },
+  { id: 'snake', key: 'snakesAndLadders', icon: '🐍', color: COLORS.green, active: true },
+  { id: 'spin', key: 'luckySpin', icon: '🎡', color: COLORS.yellow, active: true },
 ];
 
 export const HomeScreen: React.FC<{
@@ -44,8 +53,16 @@ export const HomeScreen: React.FC<{
   currentTab = 'home',
   onChangeTab,
 }) => {
+  const { t } = useI18n();
   const currentState = String(state || stateMode || 'data').toLowerCase();
   const greeting = user?.name ? `Hi, ${user.name}` : 'Hi';
+
+  const games = useMemo(() => {
+    return GAME_DEFINITIONS.map((g) => ({
+      ...g,
+      name: t(g.key),
+    }));
+  }, [t]);
 
   const handleLudo = () => {
     if (onOpenLudo) onOpenLudo();
@@ -71,7 +88,7 @@ export const HomeScreen: React.FC<{
     }
     if (id === 'snake') return handleSnakes();
     if (id === 'spin') return handleSpin();
-    toast('Coming soon');
+    toast(t('comingSoon'));
   };
 
   return (
@@ -81,14 +98,14 @@ export const HomeScreen: React.FC<{
         <span className="font-semibold text-lg text-white">AK MIND TRAINER</span>
         <div className="flex items-center gap-2">
           <button onClick={onOpenCoins}><CoinBadge coins={coins} /></button>
-          <button onClick={onOpenSettings || onOpenProfile} className="text-xl">⚙️</button>
+          <button onClick={onOpenSettings || onOpenProfile} className="text-xl cursor-pointer" title={t('settings')}>⚙️</button>
         </div>
       </div>
 
       <div className="px-4 mt-2 mb-4 shrink-0 flex items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-2xl text-white">{greeting}</h2>
-          <p className="text-sm mt-0.5" style={{ color: COLORS.textSecondary }}>Ready to play?</p>
+          <p className="text-sm mt-0.5" style={{ color: COLORS.textSecondary }}>{t('readyToPlayQuestion')}</p>
         </div>
         <PWAInstallButton variant="compact" />
       </div>
@@ -96,7 +113,7 @@ export const HomeScreen: React.FC<{
       <div className="px-4 grid grid-cols-2 gap-4 flex-1 overflow-y-auto pb-6 no-scrollbar">
         {currentState === 'loading'
           ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} h="160px" radius={20} />)
-          : GAMES.map((g) => (
+          : games.map((g) => (
               <button
                 key={g.id}
                 onClick={() => handleGame(g.id)}
@@ -118,13 +135,13 @@ export const HomeScreen: React.FC<{
       <div className="h-16 border-t flex items-center justify-around shrink-0" style={{ background: COLORS.surfaceDark, borderColor: '#8D99AE22' }}>
         <NavItem
           icon="🏠"
-          label="Home"
+          label={t('home')}
           active={currentTab === 'home'}
           onClick={() => onChangeTab?.('home')}
         />
         <NavItem
           icon="🎮"
-          label="Play"
+          label={t('play')}
           active={currentTab === 'play'}
           onClick={() => {
             onChangeTab?.('play');
@@ -133,7 +150,7 @@ export const HomeScreen: React.FC<{
         />
         <NavItem
           icon="👤"
-          label="Profile"
+          label={t('profile')}
           active={currentTab === 'profile'}
           onClick={() => {
             onChangeTab?.('profile');
@@ -146,7 +163,7 @@ export const HomeScreen: React.FC<{
 };
 
 const NavItem: React.FC<{ icon: string; label: string; active?: boolean; onClick?: () => void }> = ({ icon, label, active, onClick }) => (
-  <button onClick={onClick} className="flex flex-col items-center gap-1" style={{ color: active ? COLORS.red : COLORS.textSecondary }}>
+  <button onClick={onClick} className="flex flex-col items-center gap-1 cursor-pointer" style={{ color: active ? COLORS.red : COLORS.textSecondary }}>
     <span style={{ fontSize: 20 }}>{icon}</span>
     <span className="text-[10px] font-medium">{label}</span>
   </button>

@@ -4,6 +4,7 @@ import { Button, EmptyStateWidget, SkeletonBox, ErrorBanner, AppAvatar } from '.
 import { ActiveRoomSummary, ScreenStateMode, StateMode } from '../../types/ludoverse';
 import { BoardPlayerCount } from '../../games/ludo/polygonalBoardGeometry';
 import { TeamMode } from '../../games/ludo/teamRules';
+import { useI18n } from '../../utils/i18n';
 
 export interface RoomConfigOptions {
   isPrivate: boolean;
@@ -31,6 +32,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   state,
   stateMode,
 }) => {
+  const { t } = useI18n();
   const effectiveState = String(state || stateMode || 'DATA').toUpperCase();
   const [activeTab, setActiveTab] = useState<'join' | 'create'>('join');
   const [codeDigits, setCodeDigits] = useState<string[]>(['', '', '', '']);
@@ -181,7 +183,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           >
             <ArrowLeft className="w-5 h-5 text-current" />
           </button>
-          <h1 className="font-heading text-xl font-semibold">Ludo Lobby</h1>
+          <h1 className="font-heading text-xl font-semibold">{t('lobby')}</h1>
         </div>
 
         {/* Tabs (Segmented control): "Join Room" | "Create Room" */}
@@ -194,7 +196,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 : 'text-[#8D99AE] hover:text-current'
             }`}
           >
-            Join Room
+            {t('joinRoom')}
           </button>
           <button
             onClick={() => setActiveTab('create')}
@@ -204,7 +206,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 : 'text-[#8D99AE] hover:text-current'
             }`}
           >
-            Create Room
+            {t('createRoom')}
           </button>
         </div>
       </div>
@@ -488,7 +490,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                   }`}
                 >
                   <Globe className="w-4 h-4" />
-                  <span>Public Room</span>
+                  <span>{t('publicRoom')}</span>
                 </button>
 
                 <button
@@ -501,7 +503,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                   }`}
                 >
                   <Lock className="w-4 h-4" />
-                  <span>Private (Code)</span>
+                  <span>{t('privateRoom')}</span>
                 </button>
               </div>
             </div>

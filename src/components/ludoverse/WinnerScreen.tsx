@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Trophy, Share2, RotateCcw, ArrowLeft } from 'lucide-react';
 import { Button, AppAvatar, SkeletonBox, Toast } from './UIComponents';
 import { GameWinnerStats, ScreenStateMode } from '../../types/ludoverse';
+import { useI18n } from '../../utils/i18n';
 
 interface WinnerScreenProps {
   stats?: GameWinnerStats | null;
@@ -28,6 +29,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
   onBackLobby,
   stateMode = 'DATA',
 }) => {
+  const { t } = useI18n();
   const handleLobby = onBackLobby || onBackToLobby || (() => {});
   const [confettiPieces, setConfettiPieces] = useState<
     { id: number; left: number; delay: number; color: string; size: number }[]
@@ -62,7 +64,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
         text: `I just won a match on AK MIND TRAINER!`,
       }).catch(() => {});
     } else {
-      setToastMessage('Victory shared to clipboard!');
+      setToastMessage(t('victoryShared'));
       setTimeout(() => setToastMessage(null), 2000);
     }
   };
@@ -157,7 +159,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
 
         {/* "Winner!" text below (Inter 16sp, grey) */}
         <p className="text-[16px] text-[#8D99AE] font-medium tracking-wide mt-0.5">
-          Winner!
+          {t('winnerExclamation')}
         </p>
 
         {/* Stats Card: 3-column grid (fade-in after 500ms) */}
@@ -177,7 +179,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
               {/* Column 1: Moves taken */}
               <div>
                 <span className="text-[10px] text-[#8D99AE] uppercase font-bold tracking-wider">
-                  Moves
+                  {t('moves')}
                 </span>
                 <p className="font-heading text-base font-bold mt-0.5">
                   {!isEmpty && stats?.moves !== null && stats?.moves !== undefined ? stats.moves : '-'}
@@ -189,7 +191,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
               {/* Column 2: Total time */}
               <div>
                 <span className="text-[10px] text-[#8D99AE] uppercase font-bold tracking-wider">
-                  Total Time
+                  {t('totalTime')}
                 </span>
                 <p className="font-heading text-base font-bold mt-0.5">
                   {!isEmpty ? formattedTime : '-'}
@@ -201,7 +203,7 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
               {/* Column 3: Tokens captured */}
               <div>
                 <span className="text-[10px] text-[#8D99AE] uppercase font-bold tracking-wider">
-                  Captured
+                  {t('captured')}
                 </span>
                 <p className="font-heading text-base font-bold text-[#EF476F] mt-0.5">
                   {!isEmpty && stats?.kills !== null && stats?.kills !== undefined ? stats.kills : '-'}
@@ -216,11 +218,11 @@ export const WinnerScreen: React.FC<WinnerScreenProps> = ({
       <div className="z-10 space-y-3 pt-2">
         <Button variant="primary" onClick={onPlayAgain} className="w-full !h-[52px]">
           <RotateCcw className="w-4 h-4 mr-1.5" />
-          Play Again
+          {t('playAgain')}
         </Button>
 
         <Button variant="secondary" onClick={handleLobby} className="w-full !h-[52px]">
-          Back to Lobby
+          {t('backToLobby')}
         </Button>
       </div>
 

@@ -8,6 +8,7 @@ import {
   Dices,
 } from 'lucide-react';
 import { ScreenId, ScreenStateMode, ThemeMode, LudoColor, StateMode } from '../../types/ludoverse';
+import { useI18n, Language } from '../../utils/i18n';
 
 interface DesignInspectorToolbarProps {
   currentScreen?: ScreenId;
@@ -50,6 +51,14 @@ export const DesignInspectorToolbar: React.FC<DesignInspectorToolbarProps> = ({
   onCycleTurn,
   onForceDiceValue,
 }) => {
+  const { language, setLanguage, languages } = useI18n();
+
+  const cycleLanguage = () => {
+    const list: Language[] = ['en', 'hi', 'es', 'fr'];
+    const nextIdx = (list.indexOf(language) + 1) % list.length;
+    setLanguage(list[nextIdx]);
+  };
+
   const rawScreen = screen || currentScreen || 'splash';
   const activeScreen =
     rawScreen === 'forgot'
@@ -191,11 +200,20 @@ export const DesignInspectorToolbar: React.FC<DesignInspectorToolbarProps> = ({
         </div>
       )}
 
-      {/* Theme & Device Frame */}
+      {/* Language, Theme & Device Frame */}
       <div className="flex items-center gap-2">
         <button
+          onClick={cycleLanguage}
+          className="px-2 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/80 border border-indigo-700/60 flex items-center gap-1.5 text-xs text-indigo-200 font-bold transition-colors cursor-pointer shadow-xs"
+          title={`Language: ${languages.find((l) => l.code === language)?.name} (Click to switch)`}
+        >
+          <span>{languages.find((l) => l.code === language)?.flag}</span>
+          <span className="uppercase text-[11px]">{language}</span>
+        </button>
+
+        <button
           onClick={onToggleTheme}
-          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-1.5 text-slate-200"
+          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center gap-1.5 text-slate-200 cursor-pointer"
           title={`Switch to ${themeMode === 'dark' ? 'Light' : 'Dark'} Mode`}
         >
           {themeMode === 'dark' ? (

@@ -13,6 +13,7 @@ import { soundEngine } from '../../utils/audio';
 import { haptics } from '../../utils/haptics';
 import { SoundSettingsModal } from './SoundSettingsModal';
 import { TeamMode, getTeamsForMatch, hasPlayerFinishedAllTokens } from '../../games/ludo/teamRules';
+import { useI18n } from '../../utils/i18n';
 
 // 6-Player Hexagonal Board imports
 import { HexagonalLudoBoard } from '../../games/ludo/HexagonalLudoBoard';
@@ -116,6 +117,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
   initialTeamMode,
   customSeats,
 }) => {
+  const { t } = useI18n();
   const [matchMode, setMatchMode] = useState<MatchMode>(() => {
     if (initialMatchMode) return initialMatchMode;
     if (initialBoardType === 'pentagon') return 'pentagon';
@@ -526,7 +528,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            🪵 Classic 4P
+            🪵 {t('classic4P')}
           </button>
 
           <button
@@ -541,7 +543,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            🤝 Jodi 2v2
+            🤝 {t('jodi2v2')}
           </button>
 
           <button
@@ -556,7 +558,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            ⬟ Pentagon 5P
+            ⬟ {t('pentagon5P')}
           </button>
 
           <button
@@ -571,7 +573,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            ⬡ Hexagon 6P
+            ⬡ {t('hexagon6P')}
           </button>
 
           <button
@@ -586,7 +588,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            🔷 Octagon 8P
+            🔷 {t('octagon8P')}
           </button>
 
           <button
@@ -601,7 +603,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            💠 Enneagon 9P
+            💠 {t('enneagon9P')}
           </button>
 
           <button
@@ -616,7 +618,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            ⭐ Decagon 10P
+            ⭐ {t('decagon10P')}
           </button>
 
           <button
@@ -631,7 +633,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
                 : 'text-gray-400 hover:text-white'
             }`}
           >
-            ⚔️ 2P Duel
+            ⚔️ {t('duel2P')}
           </button>
         </div>
 
@@ -644,10 +646,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
               setSetupModalOpen(true);
             }}
             className="px-2 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 border border-indigo-400/40 text-[11px] font-bold text-indigo-200 flex items-center gap-1 transition-all cursor-pointer shadow-xs"
-            title="Match Setup & Custom Seats"
+            title={t('setup')}
           >
             <span>⚙️</span>
-            <span className="hidden sm:inline">Setup</span>
+            <span className="hidden sm:inline">{t('setup')}</span>
           </button>
 
           <button
@@ -759,21 +761,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({
         <span className="font-semibold">
           {activePhase === 'ended'
             ? isPolygonal && polygonalGame.state.winningTeam
-              ? `🏆 ${polygonalGame.state.winningTeam.name} Wins the Match!`
+              ? `🏆 ${polygonalGame.state.winningTeam.name} ${t('winsTheMatch')}`
               : matchMode === 'jodi'
               ? classicGame.state.winner === 0
-                ? '🏆 Team Alpha (You & Marcus) Wins Jodi Match!'
-                : '🏆 Team Beta (Samantha & Devin) Wins Jodi Match!'
-              : `🏆 Match Finished! ${activePlayerName} Wins!`
+                ? `🏆 ${t('teamAlpha')} (You & Marcus) ${t('winsTheMatch')}`
+                : `🏆 ${t('teamBeta')} (Samantha & Devin) ${t('winsTheMatch')}`
+              : `🏆 ${t('matchFinished')} ${activePlayerName} ${t('winsTheMatch')}`
             : isJodiPartnerAssist
-            ? `🤝 Partner Assist: ${activePlayerName} is rolling to move partner's token!`
+            ? `🤝 ${t('partnerAssist')}`
             : passAndPlay || activeIsHumanTurn
             ? activePhase === 'waiting'
-              ? `${activePlayerName}: Roll the Dice`
+              ? `${activePlayerName}: ${t('rollTheDice')}`
               : activePhase === 'selecting'
-              ? 'Tap glowing token (path trail shown!)'
-              : 'Rolling…'
-            : `${activePlayerName} (Bot) thinking…`}
+              ? t('tapGlowingToken')
+              : t('rolling')
+            : `${activePlayerName} (Bot) ${t('botThinking')}`}
         </span>
       </div>
 
@@ -1151,7 +1153,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({
               className="mt-2 w-full h-11 rounded-xl font-bold text-xs text-white active:scale-98 transition-transform"
               style={{ background: isOctagon ? '#0055D4' : isDecagon ? '#7C3AED' : COLORS.blue }}
             >
-              Ready to Play!
+              {t('readyToPlay')}
             </button>
           </div>
         </div>
@@ -1166,8 +1168,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({
       {/* Confirm Quit Dialog */}
       <ConfirmDialog
         open={confirmQuit}
-        title="Quit Match?"
-        message="Are you sure you want to exit the current match?"
+        title={t('quitConfirmTitle')}
+        message={t('quitConfirmMsg')}
+        confirmText={t('confirm')}
+        cancelText={t('cancel')}
         destructive
         onCancel={() => setConfirmQuit(false)}
         onConfirm={() => {
